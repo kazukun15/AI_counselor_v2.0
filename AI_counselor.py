@@ -6,7 +6,7 @@ from streamlit_chat import message  # pip install streamlit-chat
 # ------------------------
 # ページ設定（最初に実行）
 # ------------------------
-st.set_page_config(page_title="役場メンタルケア - チャット", layout="wide")
+st.set_page_config(page_title="職員メンタルケア", layout="wide")
 
 # ------------------------
 # ユーザー情報入力（画面上部）
