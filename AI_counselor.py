@@ -6,7 +6,7 @@ from streamlit_chat import message  # pip install streamlit-chat
 # ------------------------
 # ページ設定（最初に実行）
 # ------------------------
-st.set_page_config(page_title="役場メンタルケア - チャット", layout="wide")
+st.set_page_config(page_title="メンタルケアボット", layout="wide")
 
 # ------------------------
 # タイトル表示（ユーザー情報入力の上部に表示）
@@ -58,7 +58,6 @@ if st.session_state.get("show_selection_form", False):
     
     stress_level = st.sidebar.slider("ストレスレベル (1-10)", 1, 10, 5, key="stress")
     recent_events = st.sidebar.text_area("最近の大きな出来事（任意）", key="events")
-    # ラベルを「通院歴がありますか？」に変更
     treatment_history = st.sidebar.radio("通院歴がありますか？", ["はい", "いいえ"], key="treatment")
     ongoing_treatment = ""
     if treatment_history == "はい":
@@ -95,7 +94,23 @@ def truncate_text(text, max_length=400):
     return text if len(text) <= max_length else text[:max_length] + "…"
 
 def split_message(message: str, chunk_size=200) -> list:
-    return [message[i:i+chunk_size] for i in range(0, len(message), chunk_size)]
+    chunks = []
+    while len(message) > chunk_size:
+        # 自然な切れ目（句点、感嘆符、疑問符）の最後の出現位置を探す
+        break_point = -1
+        for punct in ["。", "！", "？"]:
+            pos = message.rfind(punct, 0, chunk_size)
+            if pos > break_point:
+                break_point = pos
+        if break_point == -1:
+            break_point = chunk_size
+        else:
+            break_point += 1
+        chunks.append(message[:break_point].strip())
+        message = message[break_point:].strip()
+    if message:
+        chunks.append(message)
+    return chunks
 
 def remove_json_artifacts(text: str) -> str:
     if not isinstance(text, str):
@@ -191,8 +206,9 @@ def display_chat_bubble(sender: str, message: str, align: str):
             color: #000;
             font-family: Arial, sans-serif;
             text-align: right;
-            margin-left: auto;
-            max-width: 50%;
+            width: 50%;
+            float: right;
+            clear: both;
         ">
             <strong>{sender}</strong>: {message} 😊
         </div>
@@ -208,7 +224,9 @@ def display_chat_bubble(sender: str, message: str, align: str):
             color: #000;
             font-family: Arial, sans-serif;
             text-align: left;
-            max-width: 50%;
+            width: 50%;
+            float: left;
+            clear: both;
         ">
             <strong>{sender}</strong>: {message} 👍
         </div>
