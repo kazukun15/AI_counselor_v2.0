@@ -4,6 +4,25 @@ import re
 from streamlit_chat import message  # pip install streamlit-chat
 
 # ------------------------
+# カスタムCSSの挿入（柔らかい薄いピンク・黄色）
+# ------------------------
+st.markdown(
+    """
+    <style>
+    /* メイン画面の背景を薄いピンクに設定 */
+    .reportview-container {
+        background: #FFF0F5;
+    }
+    /* サイドバーの背景を柔らかい黄色に設定 */
+    .sidebar .sidebar-content {
+        background: #FFF5EE;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
+# ------------------------
 # ページ設定（最初に実行）
 # ------------------------
 st.set_page_config(page_title="メンタルケアボット", layout="wide")
@@ -17,9 +36,10 @@ st.title("メンタルケアボット")
 # ユーザー情報入力（画面上部）
 # ------------------------
 user_name = st.text_input("あなたの名前を入力してください", value="愛媛県庁職員", key="user_name")
-col1, col2 = st.columns([3,1])
+col1, col2 = st.columns([3, 1])
 with col1:
-    consult_type = st.radio("相談タイプを選択してください", ("本人の相談", "他者の相談", "デリケートな相談"), key="consult_type")
+    consult_type = st.radio("相談タイプを選択してください", 
+                            ("本人の相談", "他者の相談", "デリケートな相談"), key="consult_type")
 with col2:
     if st.button("選択式相談フォームを開く", key="open_form"):
         st.session_state["show_selection_form"] = True
@@ -96,7 +116,6 @@ def truncate_text(text, max_length=400):
 def split_message(message: str, chunk_size=200) -> list:
     chunks = []
     while len(message) > chunk_size:
-        # 自然な切れ目（句点、感嘆符、疑問符）の最後の出現位置を探す
         break_point = -1
         for punct in ["。", "！", "？"]:
             pos = message.rfind(punct, 0, chunk_size)
