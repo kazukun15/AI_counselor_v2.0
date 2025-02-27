@@ -165,7 +165,7 @@ def continue_combined_answer(additional_input: str, current_turns: str) -> str:
         "これまでの会話の流れ:\n" + current_turns + "\n\n" +
         "ユーザーの追加発言: " + additional_input + "\n\n" +
         "上記の流れを踏まえ、さらに自然な会話として、"
-        "たとえば「それでどうなったの？」といった返答を含む回答を生成してください。"
+        "専門家としての見解を踏まえた回答を生成してください。"
         "回答は300～400文字程度で、自然な日本語で出力してください。"
     )
     return truncate_text(call_gemini_api(prompt), 400)
