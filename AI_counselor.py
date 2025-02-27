@@ -4,6 +4,11 @@ import re
 from streamlit_chat import message  # pip install streamlit-chat
 
 # ------------------------
+# ページ設定（最初に実行）
+# ------------------------
+st.set_page_config(page_title="メンタルケアボット", layout="wide")
+
+# ------------------------
 # カスタムCSSの挿入（柔らかい薄いピンク・黄色）
 # ------------------------
 st.markdown(
@@ -21,11 +26,6 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
-
-# ------------------------
-# ページ設定（最初に実行）
-# ------------------------
-st.set_page_config(page_title="メンタルケアボット", layout="wide")
 
 # ------------------------
 # タイトル表示（ユーザー情報入力の上部に表示）
@@ -261,20 +261,6 @@ def display_conversation_turns(turns: list):
             display_chat_bubble("回答", chunk + suffix, "left")
 
 # ------------------------
-# 続きボタン処理
-# ------------------------
-if st.button("続きを読み込む"):
-    if st.session_state.get("conversation_turns", []):
-        context = "\n".join([f"あなた: {turn['user']}\n回答: {turn['answer']}" 
-                             for turn in st.session_state["conversation_turns"]])
-        new_answer = continue_combined_answer("続きをお願いします。", context)
-        st.session_state["conversation_turns"].append({"user": "続き", "answer": new_answer})
-        st.markdown("### 会話履歴")
-        display_conversation_turns(st.session_state["conversation_turns"])
-    else:
-        st.warning("会話がありません。")
-
-# ------------------------
 # Streamlit アプリ本体
 # ------------------------
 st.title("メンタルケアボット")
@@ -283,8 +269,7 @@ conversation_container = st.empty()
 
 if st.button("改善策のレポート"):
     if st.session_state.get("conversation_turns", []):
-        all_turns = "\n".join([f"あなた: {turn['user']}\n回答: {turn['answer']}" 
-                                for turn in st.session_state["conversation_turns"]])
+        all_turns = "\n".join([f"あなた: {turn['user']}\n回答: {turn['answer']}" for turn in st.session_state["conversation_turns"]])
         summary = generate_summary(all_turns)
         st.session_state["summary"] = summary
         st.markdown("### 改善策のレポート\n" + "**まとめ:**\n" + summary)
@@ -305,8 +290,7 @@ if submitted:
         if len(st.session_state["conversation_turns"]) == 0:
             answer_text = generate_combined_answer(user_message, persona_params)
         else:
-            context = "\n".join([f"あなた: {turn['user']}\n回答: {turn['answer']}" 
-                                 for turn in st.session_state["conversation_turns"]])
+            context = "\n".join([f"あなた: {turn['user']}\n回答: {turn['answer']}" for turn in st.session_state["conversation_turns"]])
             answer_text = continue_combined_answer(user_message, context)
         st.session_state["conversation_turns"].append({"user": user_text, "answer": answer_text})
         conversation_container.markdown("### 会話履歴")
