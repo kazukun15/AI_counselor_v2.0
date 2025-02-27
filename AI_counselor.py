@@ -192,7 +192,7 @@ def display_chat_bubble(sender: str, message: str, align: str):
             font-family: Arial, sans-serif;
             text-align: right;
             margin-left: auto;
-            max-width: 70%;
+            max-width: 50%;
         ">
             <strong>{sender}</strong>: {message} 😊
         </div>
@@ -208,7 +208,7 @@ def display_chat_bubble(sender: str, message: str, align: str):
             color: #000;
             font-family: Arial, sans-serif;
             text-align: left;
-            max-width: 70%;
+            max-width: 50%;
         ">
             <strong>{sender}</strong>: {message} 👍
         </div>
