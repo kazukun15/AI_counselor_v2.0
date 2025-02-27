@@ -6,7 +6,7 @@ from streamlit_chat import message  # pip install streamlit-chat
 # ------------------------
 # ページ設定（最初に実行）
 # ------------------------
-st.set_page_config(page_title="メンタルケアボット", layout="wide")
+st.set_page_config(page_title="役場メンタルケア - チャット", layout="wide")
 
 # ------------------------
 # タイトル表示（ユーザー情報入力の上部に表示）
@@ -58,7 +58,8 @@ if st.session_state.get("show_selection_form", False):
     
     stress_level = st.sidebar.slider("ストレスレベル (1-10)", 1, 10, 5, key="stress")
     recent_events = st.sidebar.text_area("最近の大きな出来事（任意）", key="events")
-    treatment_history = st.sidebar.radio("過去にメンタルヘルスの治療経験はありますか？", ["はい", "いいえ"], key="treatment")
+    # ラベルを「通院歴がありますか？」に変更
+    treatment_history = st.sidebar.radio("通院歴がありますか？", ["はい", "いいえ"], key="treatment")
     ongoing_treatment = ""
     if treatment_history == "はい":
         ongoing_treatment = st.sidebar.radio("現在も通院中ですか？", ["はい", "いいえ"], key="ongoing")
@@ -75,7 +76,7 @@ if st.session_state.get("show_selection_form", False):
             f"心の症状の持続期間: {mental_duration}\n"
             f"ストレスレベル: {stress_level}\n"
             f"最近の出来事: {recent_events}\n"
-            f"治療経験: {treatment_history}\n"
+            f"通院歴: {treatment_history}\n"
         )
         if treatment_history == "はい":
             selection_summary += f"現在の通院状況: {ongoing_treatment}\n"
