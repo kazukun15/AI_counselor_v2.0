@@ -135,7 +135,7 @@ def display_conversation_turns(turns: list):
 # ------------------------
 # Streamlit アプリ本体
 # ------------------------
-st.title("役場メンタルケア - チャットサポート")
+st.title("職員メンタルケア")
 
 # --- 上部：会話履歴表示エリア ---
 st.header("会話履歴")
