@@ -1,7 +1,6 @@
 [theme]
-base = "light"
-primaryColor = "#FF69B4"         # アクセントカラー（例：薄いピンク）
-backgroundColor = "#FFF0F5"      # メイン画面背景：薄いピンク
-secondaryBackgroundColor = "#FFF5EE"  # サイドバー背景：柔らかい黄色
-textColor = "#262730"
-font = "sans serif"
+primaryColor="#6e9a71"
+backgroundColor="#fbf6f8"
+secondaryBackgroundColor="#fdf8f5"
+textColor="#3f6b52"
+font="monospace"
