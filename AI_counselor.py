@@ -9,25 +9,6 @@ from streamlit_chat import message  # pip install streamlit-chat
 st.set_page_config(page_title="メンタルケアボット", layout="wide")
 
 # ------------------------
-# カスタムCSSの挿入（柔らかい薄いピンク・黄色）
-# ------------------------
-st.markdown(
-    """
-    <style>
-    /* メイン画面の背景を薄いピンクに設定 */
-    .reportview-container {
-        background: #FFF0F5;
-    }
-    /* サイドバーの背景を柔らかい黄色に設定 */
-    .sidebar .sidebar-content {
-        background: #FFF5EE;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
-
-# ------------------------
 # タイトル表示（ユーザー情報入力の上部に表示）
 # ------------------------
 st.title("メンタルケアボット")
@@ -297,11 +278,3 @@ if submitted:
         display_conversation_turns(st.session_state["conversation_turns"])
     else:
         st.warning("発言を入力してください。")
-
-[theme]
-base = "light"
-primaryColor = "#FF69B4"          # （例）メインアクセントカラー
-backgroundColor = "#FFF0F5"       # 薄いピンク
-secondaryBackgroundColor = "#FFF5EE"  # 薄い黄色
-textColor = "#262730"
-font = "sans serif"
