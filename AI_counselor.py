@@ -297,3 +297,11 @@ if submitted:
         display_conversation_turns(st.session_state["conversation_turns"])
     else:
         st.warning("発言を入力してください。")
+
+[theme]
+base = "light"
+primaryColor = "#FF69B4"          # （例）メインアクセントカラー
+backgroundColor = "#FFF0F5"       # 薄いピンク
+secondaryBackgroundColor = "#FFF5EE"  # 薄い黄色
+textColor = "#262730"
+font = "sans serif"
