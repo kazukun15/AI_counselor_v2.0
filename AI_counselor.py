@@ -199,9 +199,8 @@ def display_chat_log(chat_log: list):
             st_message(f"{sender}: {text}", is_user=False)
 
 # ------------------------
-# 初回会話の自動生成（会話ログが空の場合は何もしない）
+# 初回会話の自動生成は削除（ユーザーが発言したときに応答）
 # ------------------------
-# ※ユーザーが発言したときに応答を返すので、初回は自動生成しません。
 
 # ------------------------
 # 固定フッター（入力エリア）の配置
@@ -224,6 +223,7 @@ with st.container():
     if send_button:
         if user_input.strip():
             st.session_state.chat_log.append({"sender": "user", "message": user_input})
+            # 初回の応答は generate_discussion を使用し、それ以降は continue_discussion を使用
             if len(st.session_state.chat_log) == 1:
                 persona_params = adjust_parameters(user_input)
                 discussion = generate_discussion(user_input, persona_params)
@@ -257,7 +257,7 @@ with st.container():
                     st.session_state.chat_log.append({"sender": sender, "message": message_text})
         else:
             st.warning("まずは会話を開始してください。")
-
+            
 # ------------------------
 # 会話ウィンドウの表示
 # ------------------------
