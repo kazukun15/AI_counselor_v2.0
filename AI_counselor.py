@@ -1,56 +1,40 @@
 import streamlit as st
 import requests
 import re
-import random
+from streamlit_chat import message  # pip install streamlit-chat
 
 # ------------------------
 # ページ設定（最初に実行）
 # ------------------------
-st.set_page_config(page_title="役場メンタルケア", layout="wide")
+st.set_page_config(page_title="役場メンタルケア - チャット", layout="wide")
 
 # ------------------------
-# ユーザーの名前入力（画面上部に表示）
+# ユーザー情報入力（画面上部）
 # ------------------------
-user_name = st.text_input("あなたの名前を入力してください", value="役場職員", key="user_name")
+user_name = st.text_input("あなたの名前を入力してください", value="愛媛県庁職員", key="user_name")
+consult_type = st.radio("相談タイプを選択してください", ("本人の相談", "他者の相談", "デリケートな相談"), key="consult_type")
 
 # ------------------------
 # 定数／設定
 # ------------------------
-# APIキーは .streamlit/secrets.toml に設定してください
-# 例: [general] api_key = "YOUR_GEMINI_API_KEY"
 API_KEY = st.secrets["general"]["api_key"]
 MODEL_NAME = "gemini-2.0-flash-001"  # 必要に応じて変更
-# 新しい役割の名前
 ROLES = ["精神科医師", "カウンセラー", "メンタリスト", "内科医"]
 
 # ------------------------
-# 関数定義
+# セッションステート初期化（会話ターン単位で管理）
 # ------------------------
+if "conversation_turns" not in st.session_state:
+    st.session_state["conversation_turns"] = []
 
-def analyze_question(question: str) -> int:
-    score = 0
-    keywords_emotional = ["困った", "悩み", "苦しい", "辛い"]
-    keywords_logical = ["理由", "原因", "仕組み", "方法"]
-    for word in keywords_emotional:
-        if re.search(word, question):
-            score += 1
-    for word in keywords_logical:
-        if re.search(word, question):
-            score -= 1
-    return score
+# ------------------------
+# ヘルパー関数
+# ------------------------
+def truncate_text(text, max_length=400):
+    return text if len(text) <= max_length else text[:max_length] + "…"
 
-def adjust_parameters(question: str) -> dict:
-    # 役割ごとのパラメーターを固定設定
-    params = {}
-    # 精神科医師：専門的かつ的確な判断
-    params["精神科医師"] = {"style": "専門的", "detail": "精神科のナレッジを基に的確な判断を下す"}
-    # カウンセラー：共感と寄り添いを重視
-    params["カウンセラー"] = {"style": "共感的", "detail": "心情に寄り添い、優しくサポートする"}
-    # メンタリスト：多角的な心理学的視点からの洞察
-    params["メンタリスト"] = {"style": "洞察力に富んだ", "detail": "多角的な心理学的視点から分析する"}
-    # 内科医：実直に身体面をチェック
-    params["内科医"] = {"style": "実直な", "detail": "身体面の不調や他の病気を慎重にチェックする"}
-    return params
+def split_message(message: str, chunk_size=200) -> list:
+    return [message[i:i+chunk_size] for i in range(0, len(message), chunk_size)]
 
 def remove_json_artifacts(text: str) -> str:
     if not isinstance(text, str):
@@ -73,7 +57,7 @@ def call_gemini_api(prompt: str) -> str:
         rjson = response.json()
         candidates = rjson.get("candidates", [])
         if not candidates:
-            return "回答が見つかりませんでした。(candidatesが空)"
+            return "回答が見つかりませんでした。"
         candidate0 = candidates[0]
         content_val = candidate0.get("content", "")
         if isinstance(content_val, dict):
@@ -83,126 +67,109 @@ def call_gemini_api(prompt: str) -> str:
             content_str = str(content_val)
         content_str = content_str.strip()
         if not content_str:
-            return "回答が見つかりませんでした。(contentが空)"
+            return "回答が見つかりませんでした。"
         return remove_json_artifacts(content_str)
     except Exception as e:
         return f"エラー: レスポンス解析に失敗しました -> {str(e)}"
 
-def generate_discussion(question: str, persona_params: dict) -> str:
-    current_user = st.session_state.get("user_name", "ユーザー")
-    prompt = f"【{current_user}さんの質問】\n{question}\n\n"
-    for role, params in persona_params.items():
-        prompt += f"{role}は【{params['style']}な視点】で、{params['detail']}。\n"
-    prompt += (
-        "\n上記情報を元に、4人が自然で協調性のある会話をしてください。\n"
-        "出力形式は以下の通りです。\n"
-        "精神科医師: 発言内容\n"
-        "カウンセラー: 発言内容\n"
-        "メンタリスト: 発言内容\n"
-        "内科医: 発言内容\n"
-        "余計なJSON形式は入れず、自然な日本語の会話のみを出力してください。"
-    )
-    return call_gemini_api(prompt)
+def adjust_parameters(question: str) -> dict:
+    params = {}
+    params["精神科医師"] = {"style": "専門的", "detail": "精神科のナレッジを基に的確な判断を下す"}
+    params["カウンセラー"] = {"style": "共感的", "detail": "寄り添いながら優しくサポートする"}
+    params["メンタリスト"] = {"style": "洞察力に富んだ", "detail": "多角的な心理学的視点から分析する"}
+    params["内科医"] = {"style": "実直な", "detail": "身体面の不調や他の病気を慎重にチェックする"}
+    return params
 
-def continue_discussion(additional_input: str, current_discussion: str) -> str:
-    prompt = (
-        "これまでの会話:\n" + current_discussion + "\n\n" +
-        "ユーザーの追加発言: " + additional_input + "\n\n" +
-        "上記の流れを踏まえ、4人がさらに連携して会話を続けてください。\n"
-        "出力形式は以下の通りです。\n"
-        "精神科医師: 発言内容\n"
-        "カウンセラー: 発言内容\n"
-        "メンタリスト: 発言内容\n"
-        "内科医: 発言内容\n"
-        "余計なJSON形式は入れず、自然な日本語の会話のみを出力してください。"
+def generate_combined_answer(question: str, persona_params: dict) -> str:
+    current_user = st.session_state.get("user_name", "ユーザー")
+    consult_type = st.session_state.get("consult_type", "本人の相談")
+    if consult_type == "デリケートな相談":
+        consult_info = ("この相談は大人の発達障害（例：ADHDなど）を含む、デリケートな相談です。"
+                        "信頼できる公的機関や学術論文を参照し、正確な情報に基づいた回答をお願いします。")
+    elif consult_type == "他者の相談":
+        consult_info = "この相談は、他者が抱える障害に関するものです。専門的な視点から客観的な判断をお願いします。"
+    else:
+        consult_info = "この相談は本人が抱える悩みに関するものです。"
+        
+    prompt = f"【{current_user}さんの質問】\n{question}\n\n{consult_info}\n"
+    prompt += (
+        "以下は、4人の専門家の意見を内部で統合した結果です。"
+        "内部の議論内容は伏せ、あなたに対する一対一の自然な会話として、"
+        "たとえば「どうしたの？もう少し詳しく教えて」といった返答を含む回答を生成してください。"
+        "回答は300～400文字程度で、自然な日本語で出力してください。"
     )
-    return call_gemini_api(prompt)
+    return truncate_text(call_gemini_api(prompt), 400)
+
+def continue_combined_answer(additional_input: str, current_turns: str) -> str:
+    prompt = (
+        "これまでの会話の流れ:\n" + current_turns + "\n\n" +
+        "ユーザーの追加発言: " + additional_input + "\n\n" +
+        "上記の流れを踏まえ、さらに自然な会話として、"
+        "たとえば「それでどうなったの？」といった返答を含む回答を生成してください。"
+        "回答は300～400文字程度で、自然な日本語で出力してください。"
+    )
+    return truncate_text(call_gemini_api(prompt), 400)
 
 def generate_summary(discussion: str) -> str:
     prompt = (
-        "以下は4人の会話内容です。\n" + discussion + "\n\n" +
-        "この会話を踏まえて、役場職員のメンタルヘルスケアに関するまとめ回答を生成してください。\n"
-        "自然な日本語文で出力し、余計なJSON形式は不要です。"
+        "以下は4人の統合された会話内容です:\n" + discussion + "\n\n" +
+        "この内容を踏まえて、愛媛県庁職員向けのメンタルヘルスケアに関するまとめレポートを、"
+        "分かりやすいマークダウン形式で生成してください。"
     )
     return call_gemini_api(prompt)
 
-def display_line_style(text: str):
-    """
-    会話の各行を順番通りに縦に表示します。
-    各吹き出しは、各役割ごとに指定された背景色、文字色、フォントで表示されます。
-    """
-    lines = text.split("\n")
-    color_map = {
-        "精神科医師": {"bg": "#E6E6FA", "color": "#000"},  # 薄いラベンダー
-        "カウンセラー": {"bg": "#FFB6C1", "color": "#000"},   # 薄いピンク
-        "メンタリスト": {"bg": "#AFEEEE", "color": "#000"},   # 薄いターコイズ
-        "内科医": {"bg": "#98FB98", "color": "#000"}          # 薄いグリーン
-    }
-    for line in lines:
-        line = line.strip()
-        if not line:
-            continue
-        matched = re.match(r"^(精神科医師|カウンセラー|メンタリスト|内科医):\s*(.*)$", line)
-        if matched:
-            role = matched.group(1)
-            message = matched.group(2)
-        else:
-            role = ""
-            message = line
-        styles = color_map.get(role, {"bg": "#F5F5F5", "color": "#000"})
-        bg_color = styles["bg"]
-        text_color = styles["color"]
-        bubble_html = f"""
-        <div style="
-            background-color: {bg_color} !important;
-            border: 1px solid #ddd;
-            border-radius: 10px;
-            padding: 8px;
-            margin: 5px 0;
-            color: {text_color} !important;
-            font-family: Arial, sans-serif !important;
-        ">
-            <strong>{role}</strong><br>
-            {message}
-        </div>
-        """
-        st.markdown(bubble_html, unsafe_allow_html=True)
+# ------------------------
+# Streamlit Chat 表示（streamlit-chat を利用）
+# ------------------------
+def display_conversation_turns(turns: list):
+    # 最新の会話ターンが上に来るように逆順で表示
+    for turn in reversed(turns):
+        # 1対1の会話として、ユーザー発言（右寄せ）とその回答（左寄せ）のペアを表示
+        message(turn["user"], is_user=True)
+        # 回答が長い場合は分割して表示（途中は「👉」付き）
+        answer_chunks = split_message(turn["answer"], 200)
+        for i, chunk in enumerate(answer_chunks):
+            suffix = " 👉" if i < len(answer_chunks) - 1 else ""
+            message(chunk + suffix, is_user=False)
 
 # ------------------------
 # Streamlit アプリ本体
 # ------------------------
-
-st.title("役場メンタルケア - 会話サポート")
+st.title("役場メンタルケア - チャットサポート")
 
 # --- 上部：会話履歴表示エリア ---
 st.header("会話履歴")
-discussion_container = st.empty()
+conversation_container = st.empty()
+
+# --- 上部：まとめ回答ボタン ---
+if st.button("会話をまとめる"):
+    if st.session_state.get("conversation_turns", []):
+        all_turns = "\n".join([f"あなた: {turn['user']}\n回答: {turn['answer']}" for turn in st.session_state["conversation_turns"]])
+        summary = generate_summary(all_turns)
+        st.session_state["summary"] = summary
+        st.markdown("### まとめ回答\n" + "**まとめ:**\n" + summary)
+    else:
+        st.warning("まずは会話を開始してください。")
 
 # --- 下部：ユーザー入力エリア ---
 st.header("メッセージ入力")
 with st.form("chat_form", clear_on_submit=True):
-    user_input = st.text_area("新たな発言を入力してください", placeholder="ここに入力", height=100, key="user_input")
-    submit_button = st.form_submit_button("送信")
+    user_message = st.text_area("新たな発言を入力してください", placeholder="ここに入力", height=100, key="user_message")
+    submitted = st.form_submit_button("送信")
 
-if submit_button:
-    if user_input.strip():
-        if "discussion" not in st.session_state or not st.session_state["discussion"]:
-            persona_params = adjust_parameters(user_input)
-            discussion = generate_discussion(user_input, persona_params)
-            st.session_state["discussion"] = discussion
+if submitted:
+    if user_message.strip():
+        if "conversation_turns" not in st.session_state or not isinstance(st.session_state["conversation_turns"], list):
+            st.session_state["conversation_turns"] = []
+        user_text = user_message
+        persona_params = adjust_parameters(user_message)
+        if len(st.session_state["conversation_turns"]) == 0:
+            answer_text = generate_combined_answer(user_message, persona_params)
         else:
-            new_discussion = continue_discussion(user_input, st.session_state["discussion"])
-            st.session_state["discussion"] += "\n" + new_discussion
-        discussion_container.markdown("### 4人の会話")
-        display_line_style(st.session_state["discussion"])
+            context = "\n".join([f"あなた: {turn['user']}\n回答: {turn['answer']}" for turn in st.session_state["conversation_turns"]])
+            answer_text = continue_combined_answer(user_message, context)
+        st.session_state["conversation_turns"].append({"user": user_text, "answer": answer_text})
+        conversation_container.markdown("### 会話履歴")
+        display_conversation_turns(st.session_state["conversation_turns"])
     else:
         st.warning("発言を入力してください。")
-
-st.header("まとめ回答")
-if st.button("会話をまとめる"):
-    if st.session_state.get("discussion", ""):
-        summary = generate_summary(st.session_state["discussion"])
-        st.session_state["summary"] = summary
-        st.markdown("### まとめ回答\n" + "**まとめ:** " + summary)
-    else:
-        st.warning("まずは会話を開始してください。")
