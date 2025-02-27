@@ -4,6 +4,11 @@ import re
 from streamlit_chat import message  # pip install streamlit-chat
 
 # ------------------------
+# ページ設定（最初に実行）
+# ------------------------
+st.set_page_config(page_title="メンタルケアボット", layout="wide")
+
+# ------------------------
 # カスタムCSSの挿入（柔らかい薄いピンク・黄色）
 # ------------------------
 st.markdown(
@@ -21,11 +26,6 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
-
-# ------------------------
-# ページ設定（最初に実行）
-# ------------------------
-st.set_page_config(page_title="メンタルケアボット", layout="wide")
 
 # ------------------------
 # タイトル表示（ユーザー情報入力の上部に表示）
