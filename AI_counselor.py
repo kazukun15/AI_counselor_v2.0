@@ -53,7 +53,7 @@ NEW_CHAR_NAME = "新キャラクター"
 # 定数／設定（APIキーなど）
 # ------------------------
 API_KEY = st.secrets["general"]["api_key"]
-MODEL_NAME = "gemini-2.0-flash-001"  # 必要に応じて変更
+MODEL_NAME = "gemini-2.0-flash-001"  # 適宜変更
 NAMES = [YUKARI_NAME, SHINYA_NAME, MINORU_NAME]
 
 # ------------------------
@@ -63,7 +63,7 @@ if "chat_log" not in st.session_state:
     st.session_state["chat_log"] = []
 
 # ------------------------
-# アイコンの設定（今回はゆかりのみ絵文字）
+# アイコンの設定（今回はゆかりのみ絵文字で設定）
 # ------------------------
 avatar_img_dict = {
     YUKARI_NAME: "🎉",
@@ -134,7 +134,6 @@ def call_gemini_api(prompt: str) -> str:
         return f"エラー: レスポンス解析に失敗しました -> {str(e)}"
 
 def generate_discussion(question: str, persona_params: dict) -> str:
-    """最初の会話生成。ユーザーの質問と各キャラクターのパラメータを元にプロンプトを構築"""
     current_user = st.session_state.get("user_name", "ユーザー")
     prompt = f"【{current_user}さんの質問】\n{question}\n\n"
     for name, params in persona_params.items():
@@ -153,7 +152,6 @@ def generate_discussion(question: str, persona_params: dict) -> str:
     return call_gemini_api(prompt)
 
 def continue_discussion(additional_input: str, current_discussion: str) -> str:
-    """会話の続き生成。既存の会話と追加発言を元にプロンプトを構築"""
     prompt = (
         "これまでの会話:\n" + current_discussion + "\n\n" +
         "ユーザーの追加発言: " + additional_input + "\n\n" +
@@ -203,7 +201,7 @@ def display_chat_log(chat_log: list):
 # ------------------------
 # 初回会話の自動生成（会話ログが空の場合は何もしない）
 # ------------------------
-# ※初回に自動で会話を始めるのではなく、ユーザーが発言したときにその発言に対して応答する
+# ※ユーザーが発言したときに応答を返すので、初回は自動生成しません。
 
 # ------------------------
 # 固定フッター（入力エリア）の配置
@@ -226,7 +224,6 @@ with st.container():
     if send_button:
         if user_input.strip():
             st.session_state.chat_log.append({"sender": "user", "message": user_input})
-            # 初回の発言なら generate_discussion を使用
             if len(st.session_state.chat_log) == 1:
                 persona_params = adjust_parameters(user_input)
                 discussion = generate_discussion(user_input, persona_params)
@@ -260,7 +257,7 @@ with st.container():
                     st.session_state.chat_log.append({"sender": sender, "message": message_text})
         else:
             st.warning("まずは会話を開始してください。")
-            
+
 # ------------------------
 # 会話ウィンドウの表示
 # ------------------------
