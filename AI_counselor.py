@@ -6,7 +6,7 @@ from streamlit_chat import message  # pip install streamlit-chat
 # ------------------------
 # ページ設定（最初に実行）
 # ------------------------
-st.set_page_config(page_title="職員メンタルケア", layout="wide")
+st.set_page_config(page_title="役場メンタルケア - チャット", layout="wide")
 
 # ------------------------
 # ユーザー情報入力（画面上部）
@@ -26,6 +26,8 @@ ROLES = ["精神科医師", "カウンセラー", "メンタリスト", "内科�
 # ------------------------
 if "conversation_turns" not in st.session_state:
     st.session_state["conversation_turns"] = []
+if "show_selection_form" not in st.session_state:
+    st.session_state["show_selection_form"] = False
 
 # ------------------------
 # ヘルパー関数
@@ -119,12 +121,30 @@ def generate_summary(discussion: str) -> str:
     return call_gemini_api(prompt)
 
 # ------------------------
+# 選択式相談フォーム（サイドバー）
+# ------------------------
+if st.button("選択式相談フォームを開く"):
+    st.session_state["show_selection_form"] = True
+
+if st.session_state.get("show_selection_form", False):
+    st.sidebar.header("選択式相談フォーム")
+    category = st.sidebar.selectbox("悩みの種類", ("人間関係", "仕事", "人生", "その他"), key="category")
+    physical_status = st.sidebar.radio("体の状態", ("良好", "普通", "不調"), key="physical")
+    mental_status = st.sidebar.radio("心の状態", ("落ち着いている", "やや不安", "とても不安"), key="mental")
+    additional_comments = st.sidebar.text_area("その他のコメント", key="comments")
+    if st.sidebar.button("選択内容を送信"):
+        selection_summary = f"【選択式相談フォーム】\n悩みの種類: {category}\n体の状態: {physical_status}\n心の状態: {mental_status}\nコメント: {additional_comments}"
+        if "conversation_turns" not in st.session_state or not isinstance(st.session_state["conversation_turns"], list):
+            st.session_state["conversation_turns"] = []
+        st.session_state["conversation_turns"].append({"user": selection_summary, "answer": "選択式相談フォームの内容が送信されました。"})
+        st.sidebar.success("送信しました！")
+
+# ------------------------
 # Streamlit Chat 表示（streamlit-chat を利用）
 # ------------------------
 def display_conversation_turns(turns: list):
-    # 最新の会話ターンが上に来るように逆順で表示
     for turn in reversed(turns):
-        # 1対1の会話として、ユーザー発言（右寄せ）とその回答（左寄せ）のペアを表示
+        # ユーザーの発言（右寄せ）
         message(turn["user"], is_user=True)
         # 回答が長い場合は分割して表示（途中は「👉」付き）
         answer_chunks = split_message(turn["answer"], 200)
@@ -135,7 +155,7 @@ def display_conversation_turns(turns: list):
 # ------------------------
 # Streamlit アプリ本体
 # ------------------------
-st.title("職員メンタルケア")
+st.title("役場メンタルケア - チャットサポート")
 
 # --- 上部：会話履歴表示エリア ---
 st.header("会話履歴")
