@@ -11,7 +11,7 @@ st.set_page_config(page_title="ぼくのともだち", layout="wide")
 st.title("ぼくのともだち V2.2.1")
 
 # ------------------------
-# 背景・共通スタイル（必要に応じて調整）
+# 背景・共通スタイルの設定
 # ------------------------
 st.markdown(
     """
@@ -53,28 +53,26 @@ NEW_CHAR_NAME = "新キャラクター"
 # 定数／設定（APIキーなど）
 # ------------------------
 API_KEY = st.secrets["general"]["api_key"]
-MODEL_NAME = "gemini-2.0-flash-001"  # 適宜変更
-# 友達として利用するキャラクター名リスト（API生成用）
+MODEL_NAME = "gemini-2.0-flash-001"  # 必要に応じて変更
 NAMES = [YUKARI_NAME, SHINYA_NAME, MINORU_NAME]
 
 # ------------------------
-# セッション初期化（チャットログ）
+# セッション初期化
 # ------------------------
 if "chat_log" not in st.session_state:
     st.session_state["chat_log"] = []
-if "initialized" not in st.session_state:
-    st.session_state["initialized"] = False
 
 # ------------------------
-# アイコンの読み込み（ここではゆかりのみ絵文字を使用、他はなし）
+# アイコンの設定（今回はゆかりのみ絵文字）
 # ------------------------
 avatar_img_dict = {
     YUKARI_NAME: "🎉",
 }
 
 # ------------------------
-# 会話生成関連関数
+# 関数定義
 # ------------------------
+
 def analyze_question(question: str) -> int:
     score = 0
     keywords_emotional = ["困った", "悩み", "苦しい", "辛い"]
@@ -136,11 +134,11 @@ def call_gemini_api(prompt: str) -> str:
         return f"エラー: レスポンス解析に失敗しました -> {str(e)}"
 
 def generate_discussion(question: str, persona_params: dict) -> str:
+    """最初の会話生成。ユーザーの質問と各キャラクターのパラメータを元にプロンプトを構築"""
     current_user = st.session_state.get("user_name", "ユーザー")
     prompt = f"【{current_user}さんの質問】\n{question}\n\n"
     for name, params in persona_params.items():
         prompt += f"{name}は【{params['style']}な視点】で、{params['detail']}。\n"
-    # 新キャラクターの生成
     new_name, new_personality = generate_new_character()
     prompt += f"さらに、新キャラクターとして {new_name} は【{new_personality}】な性格です。彼/彼女も会話に加わってください。\n"
     prompt += (
@@ -155,6 +153,7 @@ def generate_discussion(question: str, persona_params: dict) -> str:
     return call_gemini_api(prompt)
 
 def continue_discussion(additional_input: str, current_discussion: str) -> str:
+    """会話の続き生成。既存の会話と追加発言を元にプロンプトを構築"""
     prompt = (
         "これまでの会話:\n" + current_discussion + "\n\n" +
         "ユーザーの追加発言: " + additional_input + "\n\n" +
@@ -190,42 +189,30 @@ def display_chat_log(chat_log: list):
     """
     chat_log の各メッセージを、LINE風のチャットバブル形式で表示する。
     ユーザーの発言は右寄せ、友達の発言は左寄せで表示され、テキストは自動で折り返されます。
-    最新のメッセージは入力バーの直上に表示されるよう、チャットログは逆順に表示します。
+    最新のメッセージが入力バーの直上に表示されるよう、チャットログは逆順に表示します。
     """
     from streamlit_chat import message as st_message
     for msg in reversed(chat_log):
         sender = msg["sender"]
         text = msg["message"]
-        if sender == USER_NAME:
+        if sender == "user":
             st_message(text, is_user=True)
         else:
             st_message(f"{sender}: {text}", is_user=False)
 
 # ------------------------
-# 初回会話の自動生成（チャットログが空の場合）
+# 初回会話の自動生成（会話ログが空の場合は何もしない）
 # ------------------------
-if not st.session_state.get("initialized", False):
-    st.session_state["initialized"] = True
-    if len(st.session_state["chat_log"]) == 0:
-        first_user_msg = "はじめまして。"
-        st.session_state["chat_log"].append({"sender": USER_NAME, "message": first_user_msg})
-        persona_params = adjust_parameters(first_user_msg)
-        discussion = generate_discussion(first_user_msg, persona_params)
-        for line in discussion.split("\n"):
-            line = line.strip()
-            if line:
-                parts = line.split(":", 1)
-                sender = parts[0]
-                message_text = parts[1].strip() if len(parts) > 1 else ""
-                st.session_state["chat_log"].append({"sender": sender, "message": message_text})
+# ※初回に自動で会話を始めるのではなく、ユーザーが発言したときにその発言に対して応答する
 
 # ------------------------
 # 固定フッター（入力エリア）の配置
 # ------------------------
 with st.container():
     st.markdown(
-        '<div style="position: fixed; bottom: 0; width: 100%; background: #FFF; padding: 10px; box-shadow: 0 -2px 5px rgba(0,0,0,0.1);">'
-        , unsafe_allow_html=True)
+        '<div style="position: fixed; bottom: 0; width: 100%; background: #FFF; padding: 10px; box-shadow: 0 -2px 5px rgba(0,0,0,0.1);">',
+        unsafe_allow_html=True,
+    )
     with st.form("chat_form", clear_on_submit=True):
         user_input = st.text_area("新たな発言を入力してください", placeholder="ここに入力", height=100, key="user_input")
         col1, col2 = st.columns(2)
@@ -233,42 +220,36 @@ with st.container():
             send_button = st.form_submit_button("送信")
         with col2:
             continue_button = st.form_submit_button("続きを話す")
-    st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
     
     # 送信ボタンの処理
     if send_button:
         if user_input.strip():
-            st.session_state["chat_log"].append({"sender": USER_NAME, "message": user_input})
-            if len(st.session_state["chat_log"]) == 1:
+            st.session_state.chat_log.append({"sender": "user", "message": user_input})
+            # 初回の発言なら generate_discussion を使用
+            if len(st.session_state.chat_log) == 1:
                 persona_params = adjust_parameters(user_input)
                 discussion = generate_discussion(user_input, persona_params)
-                for line in discussion.split("\n"):
-                    line = line.strip()
-                    if line:
-                        parts = line.split(":", 1)
-                        sender = parts[0]
-                        message_text = parts[1].strip() if len(parts) > 1 else ""
-                        st.session_state["chat_log"].append({"sender": sender, "message": message_text})
             else:
-                new_discussion = continue_discussion(user_input, "\n".join(
-                    [f'{chat["sender"]}: {chat["message"]}' for chat in st.session_state["chat_log"] if chat["sender"] in NAMES or chat["sender"] == NEW_CHAR_NAME]
+                discussion = continue_discussion(user_input, "\n".join(
+                    [f'{chat["sender"]}: {chat["message"]}' for chat in st.session_state.chat_log if chat["sender"] in NAMES or chat["sender"] == NEW_CHAR_NAME]
                 ))
-                for line in new_discussion.split("\n"):
-                    line = line.strip()
-                    if line:
-                        parts = line.split(":", 1)
-                        sender = parts[0]
-                        message_text = parts[1].strip() if len(parts) > 1 else ""
-                        st.session_state["chat_log"].append({"sender": sender, "message": message_text})
+            for line in discussion.split("\n"):
+                line = line.strip()
+                if line:
+                    parts = line.split(":", 1)
+                    sender = parts[0]
+                    message_text = parts[1].strip() if len(parts) > 1 else ""
+                    st.session_state.chat_log.append({"sender": sender, "message": message_text})
         else:
             st.warning("発言を入力してください。")
     
     # 続きを話すボタンの処理
     if continue_button:
-        if st.session_state["chat_log"]:
+        if st.session_state.chat_log:
             default_input = "続きをお願いします。"
             new_discussion = continue_discussion(default_input, "\n".join(
-                [f'{chat["sender"]}: {chat["message"]}' for chat in st.session_state["chat_log"] if chat["sender"] in NAMES or chat["sender"] == NEW_CHAR_NAME]
+                [f'{chat["sender"]}: {chat["message"]}' for chat in st.session_state.chat_log if chat["sender"] in NAMES or chat["sender"] == NEW_CHAR_NAME]
             ))
             for line in new_discussion.split("\n"):
                 line = line.strip()
@@ -276,15 +257,15 @@ with st.container():
                     parts = line.split(":", 1)
                     sender = parts[0]
                     message_text = parts[1].strip() if len(parts) > 1 else ""
-                    st.session_state["chat_log"].append({"sender": sender, "message": message_text})
+                    st.session_state.chat_log.append({"sender": sender, "message": message_text})
         else:
             st.warning("まずは会話を開始してください。")
-
+            
 # ------------------------
 # 会話ウィンドウの表示
 # ------------------------
 st.header("会話履歴")
-if st.session_state["chat_log"]:
-    display_chat_log(st.session_state["chat_log"])
+if st.session_state.chat_log:
+    display_chat_log(st.session_state.chat_log)
 else:
     st.markdown("<p style='color: gray;'>ここに会話が表示されます。</p>", unsafe_allow_html=True)
