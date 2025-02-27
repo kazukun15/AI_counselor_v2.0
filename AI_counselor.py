@@ -335,7 +335,7 @@ if st.button("続きを読み込む"):
         context = "\n".join([f"あなた: {turn['user']}\n回答: {turn['answer']}" for turn in st.session_state["conversation_turns"]])
         new_answer = continue_combined_answer("続きをお願いします。", context)
         st.session_state["conversation_turns"].append({"user": "続き", "answer": new_answer})
-        conversation_container.markdown("### 会話履歴")
+        conversation_container.markdown("###")
         display_conversation_turns(st.session_state["conversation_turns"])
     else:
         st.warning("会話がありません。")
