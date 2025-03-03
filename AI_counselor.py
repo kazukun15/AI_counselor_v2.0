@@ -68,12 +68,13 @@ if "show_selection_form" not in st.session_state:
 
 # ------------------------
 # アバター画像の読み込み
+#   画像はスクリプトと同じディレクトリ内の「avatars」フォルダに配置
 # ------------------------
 try:
-    img_psychiatrist = Image.open("AI_counselor_v2.0/avatars/Psychiatrist.png")
-    img_counselor = Image.open("AI_counselor_v2.0/avatars/counselor.png")
-    img_mentalist = Image.open("AI_counselor_v2.0/avatars/MENTALIST.png")
-    img_doctor = Image.open("AI_counselor_v2.0/avatars/doctor.png")
+    img_psychiatrist = Image.open("./avatars/Psychiatrist.png")
+    img_counselor = Image.open("./avatars/counselor.png")
+    img_mentalist = Image.open("./avatars/MENTALIST.png")
+    img_doctor = Image.open("./avatars/doctor.png")
 except Exception as e:
     st.error(f"画像読み込みエラー: {e}")
     img_psychiatrist = "🧠"
@@ -82,7 +83,7 @@ except Exception as e:
     img_doctor = "💊"
 
 avatar_dict = {
-    "あなた": "👤",  # ユーザー用
+    "あなた": "👤",  # ユーザー用（画像があれば差し替え）
     "精神科医師": img_psychiatrist,
     "カウンセラー": img_counselor,
     "メンタリスト": img_mentalist,
@@ -91,7 +92,7 @@ avatar_dict = {
 
 def get_image_base64(image):
     if isinstance(image, str):
-        return image
+        return image  # 絵文字の場合
     buffered = BytesIO()
     image.save(buffered, format="PNG")
     return base64.b64encode(buffered.getvalue()).decode()
@@ -426,7 +427,6 @@ if submitted:
         if "conversation_turns" not in st.session_state:
             st.session_state["conversation_turns"] = []
         user_text = user_message
-        # 初回は専門家の個別回答、以降は続きとして回答
         if len(st.session_state["conversation_turns"]) == 0:
             answer_text = generate_expert_answers(user_text)
         else:
@@ -438,7 +438,6 @@ if submitted:
         st.session_state["conversation_turns"].append({"user": user_text, "answer": answer_text})
         conversation_container.markdown("### 会話履歴")
         display_conversation_turns(st.session_state["conversation_turns"])
-        # 最新の回答はタイプライター風に表示
         display_chat_bubble("あなた", user_text, "right")
         typewriter_bubble("回答", answer_text, "left")
     else:
