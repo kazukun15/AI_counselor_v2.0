@@ -9,7 +9,7 @@ from streamlit_chat import message  # pip install streamlit-chat
 from PIL import Image
 
 # ------------------------
-# ページ設定（最初に実行） – st.set_page_config は最初に呼び出す！
+# ページ設定（最初に実行）
 # ------------------------
 st.set_page_config(page_title="メンタルケアボット", layout="wide")
 
@@ -61,35 +61,29 @@ ROLES = ["精神科医師", "カウンセラー", "メンタリスト", "内科�
 # ------------------------
 if "conversation_turns" not in st.session_state:
     st.session_state["conversation_turns"] = []
-if "chat_log" not in st.session_state:
-    st.session_state["chat_log"] = []
 if "show_selection_form" not in st.session_state:
     st.session_state["show_selection_form"] = False
 
 # ------------------------
 # アバター画像の読み込み
-#   ディレクトリ: AI_counselor_v2.0/avatars
-#   ファイル名: Psychiatrist.png, counselor.png, MENTALIST.png, doctor.png
+#   ディレクトリ: AI_counselor_v2.0/avatars/
+#   ファイル名: MENTALIST.png, Psychiatrist.png, counselor.png, doctor.png
 # ------------------------
 try:
-    # ユーザー用画像がある場合は下記を有効に
-    # img_user = Image.open("AI_counselor_v2.0/avatars/user.png")
-
     img_psychiatrist = Image.open("AI_counselor_v2.0/avatars/Psychiatrist.png")
     img_counselor = Image.open("AI_counselor_v2.0/avatars/counselor.png")
     img_mentalist = Image.open("AI_counselor_v2.0/avatars/MENTALIST.png")
     img_doctor = Image.open("AI_counselor_v2.0/avatars/doctor.png")
 except Exception as e:
     st.error(f"画像読み込みエラー: {e}")
-    # 画像が読み込めなかった場合のフォールバック
-    # （必要に応じて絵文字に置き換えてください）
+    # 読み込めなかった場合のフォールバック（絵文字など）
     img_psychiatrist = "🧠"
     img_counselor = "👥"
     img_mentalist = "💡"
     img_doctor = "💊"
 
 avatar_dict = {
-    "あなた": "👤",           # ユーザー用（画像がある場合は適宜変更）
+    "あなた": "👤",          # ユーザー用（画像があるなら差し替え）
     "精神科医師": img_psychiatrist,
     "カウンセラー": img_counselor,
     "メンタリスト": img_mentalist,
@@ -221,8 +215,7 @@ def analyze_question(question: str) -> int:
     return score
 
 def adjust_parameters(question: str) -> dict:
-    # この関数は回答のスタイル調整用ですが、今回は4人の専門家を固定
-    # 必要ならここでロジックを追加
+    # 今回は4人の専門家を固定するためにシンプルに実装
     return {}
 
 def generate_expert_answers(question: str) -> str:
@@ -251,13 +244,13 @@ def generate_expert_answers(question: str) -> str:
     )
     return truncate_text(call_gemini_api(prompt), 400)
 
-def continue_expert_answers(additional_input: str, current_discussion: str) -> str:
+def continue_expert_answers(additional_input: str, current_turns: str) -> str:
     """
     これまでの会話に加えてユーザーからの追加発言があったとき、
     4人の専門家が再度回答するようなプロンプトを生成
     """
     prompt = (
-        "これまでの会話:\n" + current_discussion + "\n\n" +
+        "これまでの会話:\n" + current_turns + "\n\n" +
         "ユーザーの追加発言: " + additional_input + "\n\n" +
         "上記を踏まえ、4人の専門家として回答を更新してください。必ず以下の形式で出力:\n"
         "精神科医師: <回答>\n"
@@ -277,7 +270,6 @@ def generate_summary(discussion: str) -> str:
     return call_gemini_api(prompt)
 
 def display_chat_bubble(sender: str, message: str, align: str):
-    # シンプルなチャットバブル（アイコン省略の場合）
     if align == "right":
         bubble_html = f"""
         <div style="
@@ -330,14 +322,12 @@ def display_conversation_turns(turns: list):
             line = line.strip()
             if not line:
                 continue
-            # 例: 「精神科医師: ・・・」 の形であれば
             if ":" in line:
                 role, ans = line.split(":", 1)
                 role = role.strip()
                 ans = ans.strip()
                 display_chat_bubble(role, ans, "left")
             else:
-                # role がない行は回答という名前で左寄せ表示
                 display_chat_bubble("回答", line, "left")
 
 # ------------------------
@@ -384,8 +374,8 @@ if submitted:
         if "conversation_turns" not in st.session_state:
             st.session_state["conversation_turns"] = []
         user_text = user_message
+        # 初回: 4人の専門家が個別回答
         if len(st.session_state["conversation_turns"]) == 0:
-            # 初回: 4人の専門家が個別回答
             answer_text = generate_expert_answers(user_text)
         else:
             # 2回目以降: 4人の専門家が続きとして回答
