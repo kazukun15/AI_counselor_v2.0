@@ -1,33 +1,26 @@
 import streamlit as st
 import requests
 import re
-import random
-from streamlit_chat import message  # streamlit-chat のメッセージ表示用関数
+from streamlit_chat import message  # pip install streamlit-chat
 
 # ------------------------
-# ページ設定
+# ページ設定（最初に実行）
 # ------------------------
-st.set_page_config(page_title="ぼくのともだち", layout="wide")
-st.title("ぼくのともだち V2.2.1")
+st.set_page_config(page_title="メンタルケアボット", layout="wide")
 
 # ------------------------
-# 背景・共通スタイルの設定
+# カスタムCSSの挿入（柔らかい薄いピンク・黄色）
 # ------------------------
 st.markdown(
     """
     <style>
-    body {
-        background-color: #e9edf5;
-        font-family: 'Helvetica Neue', sans-serif;
+    /* メイン画面の背景を薄いピンクに設定 */
+    .reportview-container {
+        background: #FFF0F5;
     }
-    .chat-container {
-        max-height: 600px;
-        overflow-y: auto;
-        padding: 15px;
-        border: 1px solid #ccc;
-        border-radius: 10px;
-        margin-bottom: 20px;
-        background-color: #ffffff;
+    /* サイドバーの背景を柔らかい黄色に設定 */
+    .sidebar .sidebar-content {
+        background: #FFF5EE;
     }
     </style>
     """,
@@ -35,67 +28,108 @@ st.markdown(
 )
 
 # ------------------------
-# ユーザーの名前入力（上部）
+# タイトル表示（ユーザー情報入力の上部に表示）
 # ------------------------
-user_name = st.text_input("あなたの名前を入力してください", value="ユーザー", key="user_name")
+st.title("メンタルケアボット")
 
 # ------------------------
-# キャラクター定義
+# ユーザー情報入力（画面上部）
 # ------------------------
-USER_NAME = "user"
-ASSISTANT_NAME = "assistant"
-YUKARI_NAME = "ゆかり"
-SHINYA_NAME = "しんや"
-MINORU_NAME = "みのる"
-NEW_CHAR_NAME = "新キャラクター"
+user_name = st.text_input("あなたの名前を入力してください", value="愛媛県庁職員", key="user_name")
+col1, col2 = st.columns([3, 1])
+with col1:
+    consult_type = st.radio("相談タイプを選択してください", 
+                            ("本人の相談", "他者の相談", "デリケートな相談"), key="consult_type")
+with col2:
+    if st.button("選択式相談フォームを開く", key="open_form"):
+        st.session_state["show_selection_form"] = True
 
 # ------------------------
-# 定数／設定（APIキーなど）
+# 定数／設定
 # ------------------------
 API_KEY = st.secrets["general"]["api_key"]
-MODEL_NAME = "gemini-2.0-flash-001"  # 適宜変更
-NAMES = [YUKARI_NAME, SHINYA_NAME, MINORU_NAME]
+MODEL_NAME = "gemini-2.0-flash-001"  # 必要に応じて変更
+ROLES = ["精神科医師", "カウンセラー", "メンタリスト", "内科医"]
 
 # ------------------------
-# セッション初期化
+# セッションステート初期化（会話ターン単位で管理）
 # ------------------------
-if "chat_log" not in st.session_state:
-    st.session_state["chat_log"] = []
+if "conversation_turns" not in st.session_state:
+    st.session_state["conversation_turns"] = []
+if "show_selection_form" not in st.session_state:
+    st.session_state["show_selection_form"] = False
 
 # ------------------------
-# アイコンの設定（今回はゆかりのみ絵文字で設定）
+# 選択式相談フォーム（サイドバー）
 # ------------------------
-avatar_img_dict = {
-    YUKARI_NAME: "🎉",
-}
+if st.session_state.get("show_selection_form", False):
+    st.sidebar.header("選択式相談フォーム")
+    category = st.sidebar.selectbox("悩みの種類", ["人間関係", "仕事", "家庭", "経済", "健康", "その他"], key="category")
+    
+    st.sidebar.subheader("身体の状態")
+    physical_status = st.sidebar.radio("身体の状態", ["良好", "普通", "不調"], key="physical")
+    physical_detail = st.sidebar.text_area("身体の状態の詳細", key="physical_detail", placeholder="具体的な症状や変化を記入")
+    physical_duration = st.sidebar.selectbox("身体の症状の持続期間", ["数日", "1週間", "1ヶ月以上", "不明"], key="physical_duration")
+    
+    st.sidebar.subheader("心の状態")
+    mental_status = st.sidebar.radio("心の状態", ["落ち着いている", "やや不安", "とても不安"], key="mental")
+    mental_detail = st.sidebar.text_area("心の状態の詳細", key="mental_detail", placeholder="感じている不安やストレスの内容を記入")
+    mental_duration = st.sidebar.selectbox("心の症状の持続期間", ["数日", "1週間", "1ヶ月以上", "不明"], key="mental_duration")
+    
+    stress_level = st.sidebar.slider("ストレスレベル (1-10)", 1, 10, 5, key="stress")
+    recent_events = st.sidebar.text_area("最近の大きな出来事（任意）", key="events")
+    treatment_history = st.sidebar.radio("通院歴がありますか？", ["はい", "いいえ"], key="treatment")
+    ongoing_treatment = ""
+    if treatment_history == "はい":
+        ongoing_treatment = st.sidebar.radio("現在も通院中ですか？", ["はい", "いいえ"], key="ongoing")
+    
+    if st.sidebar.button("選択内容を送信", key="submit_selection"):
+        selection_summary = (
+            f"【選択式相談フォーム】\n"
+            f"悩みの種類: {category}\n"
+            f"身体の状態: {physical_status}\n"
+            f"身体の詳細: {physical_detail}\n"
+            f"身体の症状の持続期間: {physical_duration}\n"
+            f"心の状態: {mental_status}\n"
+            f"心の詳細: {mental_detail}\n"
+            f"心の症状の持続期間: {mental_duration}\n"
+            f"ストレスレベル: {stress_level}\n"
+            f"最近の出来事: {recent_events}\n"
+            f"通院歴: {treatment_history}\n"
+        )
+        if treatment_history == "はい":
+            selection_summary += f"現在の通院状況: {ongoing_treatment}\n"
+        if "conversation_turns" not in st.session_state or not isinstance(st.session_state["conversation_turns"], list):
+            st.session_state["conversation_turns"] = []
+        st.session_state["conversation_turns"].append({
+            "user": selection_summary, 
+            "answer": "選択式相談フォームの内容が送信され、反映されました。"
+        })
+        st.sidebar.success("送信しました！")
 
 # ------------------------
-# 関数定義
+# ヘルパー関数（チャット生成・表示）
 # ------------------------
+def truncate_text(text, max_length=400):
+    return text if len(text) <= max_length else text[:max_length] + "…"
 
-def analyze_question(question: str) -> int:
-    score = 0
-    keywords_emotional = ["困った", "悩み", "苦しい", "辛い"]
-    keywords_logical = ["理由", "原因", "仕組み", "方法"]
-    for word in keywords_emotional:
-        if re.search(word, question):
-            score += 1
-    for word in keywords_logical:
-        if re.search(word, question):
-            score -= 1
-    return score
-
-def adjust_parameters(question: str) -> dict:
-    score = analyze_question(question)
-    params = {}
-    params["ゆかり"] = {"style": "明るくはっちゃけた", "detail": "楽しい雰囲気で元気な回答"}
-    if score > 0:
-        params["しんや"] = {"style": "共感的", "detail": "心情を重視した解説"}
-        params["みのる"] = {"style": "柔軟", "detail": "状況に合わせた多面的な視点"}
-    else:
-        params["しんや"] = {"style": "分析的", "detail": "データや事実を踏まえた説明"}
-        params["みのる"] = {"style": "客観的", "detail": "中立的な視点からの考察"}
-    return params
+def split_message(message: str, chunk_size=200) -> list:
+    chunks = []
+    while len(message) > chunk_size:
+        break_point = -1
+        for punct in ["。", "！", "？"]:
+            pos = message.rfind(punct, 0, chunk_size)
+            if pos > break_point:
+                break_point = pos
+        if break_point == -1:
+            break_point = chunk_size
+        else:
+            break_point += 1
+        chunks.append(message[:break_point].strip())
+        message = message[break_point:].strip()
+    if message:
+        chunks.append(message)
+    return chunks
 
 def remove_json_artifacts(text: str) -> str:
     if not isinstance(text, str):
@@ -118,7 +152,7 @@ def call_gemini_api(prompt: str) -> str:
         rjson = response.json()
         candidates = rjson.get("candidates", [])
         if not candidates:
-            return "回答が見つかりませんでした。(candidatesが空)"
+            return "回答が見つかりませんでした。"
         candidate0 = candidates[0]
         content_val = candidate0.get("content", "")
         if isinstance(content_val, dict):
@@ -128,141 +162,138 @@ def call_gemini_api(prompt: str) -> str:
             content_str = str(content_val)
         content_str = content_str.strip()
         if not content_str:
-            return "回答が見つかりませんでした。(contentが空)"
+            return "回答が見つかりませんでした。"
         return remove_json_artifacts(content_str)
     except Exception as e:
         return f"エラー: レスポンス解析に失敗しました -> {str(e)}"
 
-def generate_discussion(question: str, persona_params: dict) -> str:
-    current_user = st.session_state.get("user_name", "ユーザー")
-    prompt = f"【{current_user}さんの質問】\n{question}\n\n"
-    for name, params in persona_params.items():
-        prompt += f"{name}は【{params['style']}な視点】で、{params['detail']}。\n"
-    new_name, new_personality = generate_new_character()
-    prompt += f"さらに、新キャラクターとして {new_name} は【{new_personality}】な性格です。彼/彼女も会話に加わってください。\n"
-    prompt += (
-        "\n上記情報を元に、4人が友達同士のように自然な会話をしてください。\n"
-        "出力形式は以下の通りです。\n"
-        "ゆかり: 発言内容\n"
-        "しんや: 発言内容\n"
-        "みのる: 発言内容\n"
-        f"{new_name}: 発言内容\n"
-        "余計なJSON形式は入れず、自然な日本語の会話のみを出力してください。"
-    )
-    return call_gemini_api(prompt)
+def adjust_parameters(question: str) -> dict:
+    params = {}
+    params["精神科医師"] = {"style": "専門的", "detail": "精神科のナレッジを基に的確な判断を下す"}
+    params["カウンセラー"] = {"style": "共感的", "detail": "寄り添いながら優しくサポートする"}
+    params["メンタリスト"] = {"style": "洞察力に富んだ", "detail": "多角的な心理学的視点から分析する"}
+    params["内科医"] = {"style": "実直な", "detail": "身体面の不調や他の病気を慎重にチェックする"}
+    return params
 
-def continue_discussion(additional_input: str, current_discussion: str) -> str:
-    prompt = (
-        "これまでの会話:\n" + current_discussion + "\n\n" +
-        "ユーザーの追加発言: " + additional_input + "\n\n" +
-        "上記を踏まえ、4人がさらに自然な会話を続けてください。\n"
-        "出力形式は以下の通りです。\n"
-        "ゆかり: 発言内容\n"
-        "しんや: 発言内容\n"
-        "みのる: 発言内容\n"
-        "新キャラクター: 発言内容\n"
-        "余計なJSON形式は入れず、自然な日本語の会話のみを出力してください。"
+def generate_combined_answer(question: str, persona_params: dict) -> str:
+    current_user = st.session_state.get("user_name", "ユーザー")
+    consult_type = st.session_state.get("consult_type", "本人の相談")
+    if consult_type == "デリケートな相談":
+        consult_info = ("この相談は大人の発達障害（例：ADHDなど）を含む、デリケートな相談です。"
+                        "信頼できる公的機関や学術論文を参照し、正確な情報に基づいた回答をお願いします。")
+    elif consult_type == "他者の相談":
+        consult_info = "この相談は、他者が抱える障害に関するものです。専門的な視点から客観的な判断をお願いします。"
+    else:
+        consult_info = "この相談は本人が抱える悩みに関するものです。"
+        
+    prompt = f"【{current_user}さんの質問】\n{question}\n\n{consult_info}\n"
+    prompt += (
+        "以下は、4人の専門家の意見を内部で統合した結果です。"
+        "内部の議論内容は伏せ、あなたに対する一対一の自然な会話として、"
+        "たとえば「どうしたの？もう少し詳しく教えて」といった返答を含む回答を生成してください。"
+        "回答は300～400文字程度で、自然な日本語で出力してください。"
     )
-    return call_gemini_api(prompt)
+    return truncate_text(call_gemini_api(prompt), 400)
+
+def continue_combined_answer(additional_input: str, current_turns: str) -> str:
+    prompt = (
+        "これまでの会話の流れ:\n" + current_turns + "\n\n" +
+        "ユーザーの追加発言: " + additional_input + "\n\n" +
+        "上記の流れを踏まえ、さらに自然な会話として、"
+        "専門家としての見解を踏まえた回答を生成してください。"
+        "回答は300～400文字程度で、自然な日本語で出力してください。"
+    )
+    return truncate_text(call_gemini_api(prompt), 400)
 
 def generate_summary(discussion: str) -> str:
     prompt = (
-        "以下は4人の会話内容です。\n" + discussion + "\n\n" +
-        "この会話を踏まえ、質問に対するまとめ回答を生成してください。\n"
-        "自然な日本語文で出力し、余計なJSON形式は不要です。"
+        "以下は4人の統合された会話内容です:\n" + discussion + "\n\n" +
+        "この内容を踏まえて、愛媛県庁職員向けのメンタルヘルスケアに関するまとめレポートを、"
+        "分かりやすいマークダウン形式で生成してください。"
     )
     return call_gemini_api(prompt)
 
-def generate_new_character() -> tuple:
-    candidates = [
-        ("たけし", "冷静沈着で皮肉屋、どこか孤高な存在"),
-        ("さとる", "率直かつ辛辣で、常に現実を鋭く指摘する"),
-        ("りさ", "自由奔放で斬新なアイデアを持つ、ユニークな感性の持ち主"),
-        ("けんじ", "クールで合理的、論理に基づいた意見を率直に述べる"),
-        ("なおみ", "独創的で個性的、常識にとらわれず新たな視点を提供する")
-    ]
-    return random.choice(candidates)
+def display_chat_bubble(sender: str, message: str, align: str):
+    if align == "right":
+        bubble_html = f"""
+        <div style="
+            background-color: #DCF8C6;
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            padding: 8px;
+            margin: 5px 0;
+            color: #000;
+            font-family: Arial, sans-serif;
+            text-align: right;
+            width: 50%;
+            float: right;
+            clear: both;
+        ">
+            <strong>{sender}</strong>: {message} 😊
+        </div>
+        """
+    else:
+        bubble_html = f"""
+        <div style="
+            background-color: #FFFACD;
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            padding: 8px;
+            margin: 5px 0;
+            color: #000;
+            font-family: Arial, sans-serif;
+            text-align: left;
+            width: 50%;
+            float: left;
+            clear: both;
+        ">
+            <strong>{sender}</strong>: {message} 👍
+        </div>
+        """
+    st.markdown(bubble_html, unsafe_allow_html=True)
 
-def display_chat_log(chat_log: list):
-    """
-    chat_log の各メッセージを、LINE風のチャットバブル形式で表示する。
-    ユーザーの発言は右寄せ、友達の発言は左寄せで表示され、テキストは自動で折り返されます。
-    最新のメッセージが入力バーの直上に表示されるよう、チャットログは逆順に表示します。
-    """
-    from streamlit_chat import message as st_message
-    for msg in reversed(chat_log):
-        sender = msg["sender"]
-        text = msg["message"]
-        if sender == "user":
-            st_message(text, is_user=True)
-        else:
-            st_message(f"{sender}: {text}", is_user=False)
+def display_conversation_turns(turns: list):
+    for turn in reversed(turns):
+        display_chat_bubble("あなた", turn["user"], "right")
+        answer_chunks = split_message(turn["answer"], 200)
+        for i, chunk in enumerate(answer_chunks):
+            suffix = " 👉" if i < len(answer_chunks) - 1 else ""
+            display_chat_bubble("回答", chunk + suffix, "left")
 
 # ------------------------
-# 初回会話の自動生成は削除（ユーザーが発言したときに応答）
+# Streamlit アプリ本体
 # ------------------------
-
-# ------------------------
-# 固定フッター（入力エリア）の配置
-# ------------------------
-with st.container():
-    st.markdown(
-        '<div style="position: fixed; bottom: 0; width: 100%; background: #FFF; padding: 10px; box-shadow: 0 -2px 5px rgba(0,0,0,0.1);">',
-        unsafe_allow_html=True,
-    )
-    with st.form("chat_form", clear_on_submit=True):
-        user_input = st.text_area("新たな発言を入力してください", placeholder="ここに入力", height=100, key="user_input")
-        col1, col2 = st.columns(2)
-        with col1:
-            send_button = st.form_submit_button("送信")
-        with col2:
-            continue_button = st.form_submit_button("続きを話す")
-    st.markdown("</div>", unsafe_allow_html=True)
-    
-    # 送信ボタンの処理
-    if send_button:
-        if user_input.strip():
-            st.session_state.chat_log.append({"sender": "user", "message": user_input})
-            # 初回の応答は generate_discussion を使用し、それ以降は continue_discussion を使用
-            if len(st.session_state.chat_log) == 1:
-                persona_params = adjust_parameters(user_input)
-                discussion = generate_discussion(user_input, persona_params)
-            else:
-                discussion = continue_discussion(user_input, "\n".join(
-                    [f'{chat["sender"]}: {chat["message"]}' for chat in st.session_state.chat_log if chat["sender"] in NAMES or chat["sender"] == NEW_CHAR_NAME]
-                ))
-            for line in discussion.split("\n"):
-                line = line.strip()
-                if line:
-                    parts = line.split(":", 1)
-                    sender = parts[0]
-                    message_text = parts[1].strip() if len(parts) > 1 else ""
-                    st.session_state.chat_log.append({"sender": sender, "message": message_text})
-        else:
-            st.warning("発言を入力してください。")
-    
-    # 続きを話すボタンの処理
-    if continue_button:
-        if st.session_state.chat_log:
-            default_input = "続きをお願いします。"
-            new_discussion = continue_discussion(default_input, "\n".join(
-                [f'{chat["sender"]}: {chat["message"]}' for chat in st.session_state.chat_log if chat["sender"] in NAMES or chat["sender"] == NEW_CHAR_NAME]
-            ))
-            for line in new_discussion.split("\n"):
-                line = line.strip()
-                if line:
-                    parts = line.split(":", 1)
-                    sender = parts[0]
-                    message_text = parts[1].strip() if len(parts) > 1 else ""
-                    st.session_state.chat_log.append({"sender": sender, "message": message_text})
-        else:
-            st.warning("まずは会話を開始してください。")
-            
-# ------------------------
-# 会話ウィンドウの表示
-# ------------------------
+st.title("メンタルケアボット")
 st.header("会話履歴")
-if st.session_state.chat_log:
-    display_chat_log(st.session_state.chat_log)
-else:
-    st.markdown("<p style='color: gray;'>ここに会話が表示されます。</p>", unsafe_allow_html=True)
+conversation_container = st.empty()
+
+if st.button("改善策のレポート"):
+    if st.session_state.get("conversation_turns", []):
+        all_turns = "\n".join([f"あなた: {turn['user']}\n回答: {turn['answer']}" for turn in st.session_state["conversation_turns"]])
+        summary = generate_summary(all_turns)
+        st.session_state["summary"] = summary
+        st.markdown("### 改善策のレポート\n" + "**まとめ:**\n" + summary)
+    else:
+        st.warning("まずは会話を開始してください。")
+
+st.header("メッセージ入力")
+with st.form("chat_form", clear_on_submit=True):
+    user_message = st.text_area("新たな発言を入力してください", placeholder="ここに入力", height=100, key="user_message")
+    submitted = st.form_submit_button("送信")
+
+if submitted:
+    if user_message.strip():
+        if "conversation_turns" not in st.session_state or not isinstance(st.session_state["conversation_turns"], list):
+            st.session_state["conversation_turns"] = []
+        user_text = user_message
+        persona_params = adjust_parameters(user_message)
+        if len(st.session_state["conversation_turns"]) == 0:
+            answer_text = generate_combined_answer(user_message, persona_params)
+        else:
+            context = "\n".join([f"あなた: {turn['user']}\n回答: {turn['answer']}" for turn in st.session_state["conversation_turns"]])
+            answer_text = continue_combined_answer(user_message, context)
+        st.session_state["conversation_turns"].append({"user": user_text, "answer": answer_text})
+        conversation_container.markdown("### 会話履歴")
+        display_conversation_turns(st.session_state["conversation_turns"])
+    else:
+        st.warning("発言を入力してください。")
