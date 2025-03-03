@@ -57,17 +57,17 @@ MODEL_NAME = "gemini-2.0-flash-001"  # 必要に応じて変更
 ROLES = ["精神科医師", "カウンセラー", "メンタリスト", "内科医"]
 
 # ------------------------
-# セッションステート初期化（会話ターン管理）
+# セッションステート初期化
 # ------------------------
 if "conversation_turns" not in st.session_state:
     st.session_state["conversation_turns"] = []
+if "chat_log" not in st.session_state:
+    st.session_state["chat_log"] = []
 if "show_selection_form" not in st.session_state:
     st.session_state["show_selection_form"] = False
 
 # ------------------------
 # アバター画像の読み込み
-#   ディレクトリ: AI_counselor_v2.0/avatars/
-#   ファイル名: MENTALIST.png, Psychiatrist.png, counselor.png, doctor.png
 # ------------------------
 try:
     img_psychiatrist = Image.open("AI_counselor_v2.0/avatars/Psychiatrist.png")
@@ -76,14 +76,13 @@ try:
     img_doctor = Image.open("AI_counselor_v2.0/avatars/doctor.png")
 except Exception as e:
     st.error(f"画像読み込みエラー: {e}")
-    # 読み込めなかった場合のフォールバック（絵文字など）
     img_psychiatrist = "🧠"
     img_counselor = "👥"
     img_mentalist = "💡"
     img_doctor = "💊"
 
 avatar_dict = {
-    "あなた": "👤",          # ユーザー用（画像があるなら差し替え）
+    "あなた": "👤",  # ユーザー用
     "精神科医師": img_psychiatrist,
     "カウンセラー": img_counselor,
     "メンタリスト": img_mentalist,
@@ -92,27 +91,30 @@ avatar_dict = {
 
 def get_image_base64(image):
     if isinstance(image, str):
-        return image  # 絵文字の場合
+        return image
     buffered = BytesIO()
     image.save(buffered, format="PNG")
     return base64.b64encode(buffered.getvalue()).decode()
 
 # ------------------------
-# 選択式相談フォーム（サイドバー）
+# 選択式相談フォーム（サイドバーに収納）
 # ------------------------
 if st.session_state.get("show_selection_form", False):
     st.sidebar.header("選択式相談フォーム")
-    category = st.sidebar.selectbox("悩みの種類", ["人間関係", "仕事", "家庭", "経済", "健康", "その他"], key="category")
+    category = st.sidebar.selectbox("悩みの種類", 
+                                    ["人間関係", "仕事", "家庭", "経済", "健康", "その他"], key="category")
     
     st.sidebar.subheader("身体の状態")
     physical_status = st.sidebar.radio("身体の状態", ["良好", "普通", "不調"], key="physical")
     physical_detail = st.sidebar.text_area("身体の状態の詳細", key="physical_detail", placeholder="具体的な症状や変化を記入")
-    physical_duration = st.sidebar.selectbox("身体の症状の持続期間", ["数日", "1週間", "1ヶ月以上", "不明"], key="physical_duration")
+    physical_duration = st.sidebar.selectbox("身体の症状の持続期間", 
+                                               ["数日", "1週間", "1ヶ月以上", "不明"], key="physical_duration")
     
     st.sidebar.subheader("心の状態")
     mental_status = st.sidebar.radio("心の状態", ["落ち着いている", "やや不安", "とても不安"], key="mental")
     mental_detail = st.sidebar.text_area("心の状態の詳細", key="mental_detail", placeholder="感じている不安やストレスの内容を記入")
-    mental_duration = st.sidebar.selectbox("心の症状の持続期間", ["数日", "1週間", "1ヶ月以上", "不明"], key="mental_duration")
+    mental_duration = st.sidebar.selectbox("心の症状の持続期間", 
+                                             ["数日", "1週間", "1ヶ月以上", "不明"], key="mental_duration")
     
     stress_level = st.sidebar.slider("ストレスレベル (1-10)", 1, 10, 5, key="stress")
     recent_events = st.sidebar.text_area("最近の大きな出来事（任意）", key="events")
@@ -144,7 +146,7 @@ if st.session_state.get("show_selection_form", False):
         st.sidebar.success("送信しました！")
 
 # ------------------------
-# ヘルパー関数
+# ヘルパー関数（チャット生成・表示）
 # ------------------------
 def truncate_text(text, max_length=400):
     return text if len(text) <= max_length else text[:max_length] + "…"
@@ -215,14 +217,10 @@ def analyze_question(question: str) -> int:
     return score
 
 def adjust_parameters(question: str) -> dict:
-    # 今回は4人の専門家を固定するためにシンプルに実装
+    # 今回は専門家は固定回答のため、ロジックは省略
     return {}
 
 def generate_expert_answers(question: str) -> str:
-    """
-    4人（精神科医師、カウンセラー、メンタリスト、内科医）が
-    個別に回答するようなプロンプトを生成
-    """
     current_user = st.session_state.get("user_name", "ユーザー")
     consult_type = st.session_state.get("consult_type", "本人の相談")
     if consult_type == "デリケートな相談":
@@ -232,7 +230,7 @@ def generate_expert_answers(question: str) -> str:
         consult_info = "この相談は、他者が抱える障害に関するものです。専門的かつ客観的な視点をお願いします。"
     else:
         consult_info = "この相談は本人が抱える悩みに関するものです。"
-
+        
     prompt = f"【{current_user}さんの質問】\n{question}\n\n{consult_info}\n"
     prompt += (
         "以下は、4人の専門家からの個別回答です。必ず以下の形式で出力してください:\n"
@@ -245,10 +243,6 @@ def generate_expert_answers(question: str) -> str:
     return truncate_text(call_gemini_api(prompt), 400)
 
 def continue_expert_answers(additional_input: str, current_turns: str) -> str:
-    """
-    これまでの会話に加えてユーザーからの追加発言があったとき、
-    4人の専門家が再度回答するようなプロンプトを生成
-    """
     prompt = (
         "これまでの会話:\n" + current_turns + "\n\n" +
         "ユーザーの追加発言: " + additional_input + "\n\n" +
@@ -270,6 +264,15 @@ def generate_summary(discussion: str) -> str:
     return call_gemini_api(prompt)
 
 def display_chat_bubble(sender: str, message: str, align: str):
+    avatar_html = ""
+    display_sender = sender if sender != "あなた" else "ユーザー"
+    if display_sender in avatar_dict:
+        avatar = avatar_dict[display_sender]
+        if isinstance(avatar, str):
+            avatar_html = f"<span style='font-size: 24px;'>{avatar}</span> "
+        else:
+            img_str = get_image_base64(avatar)
+            avatar_html = f"<img src='data:image/png;base64,{img_str}' style='width:30px; height:30px; margin-right:5px;'>"
     if align == "right":
         bubble_html = f"""
         <div style="
@@ -285,7 +288,7 @@ def display_chat_bubble(sender: str, message: str, align: str):
             float: right;
             clear: both;
         ">
-            <strong>{sender}</strong>: {message} 😊
+            {avatar_html}<strong>{display_sender}</strong>: {message} 😊
         </div>
         """
     else:
@@ -303,20 +306,14 @@ def display_chat_bubble(sender: str, message: str, align: str):
             float: left;
             clear: both;
         ">
-            <strong>{sender}</strong>: {message} 👍
+            {avatar_html}<strong>{display_sender}</strong>: {message} 👍
         </div>
         """
     st.markdown(bubble_html, unsafe_allow_html=True)
 
 def display_conversation_turns(turns: list):
-    """
-    4人の専門家がそれぞれ「精神科医師: ...」「カウンセラー: ...」「メンタリスト: ...」「内科医: ...」
-    という形式で回答する前提で、行ごとにパースして表示
-    """
     for turn in reversed(turns):
-        # ユーザー発言
         display_chat_bubble("あなた", turn["user"], "right")
-        # 各専門家の回答を行ごとに分割
         lines = turn["answer"].split("\n")
         for line in lines:
             line = line.strip()
@@ -324,11 +321,66 @@ def display_conversation_turns(turns: list):
                 continue
             if ":" in line:
                 role, ans = line.split(":", 1)
-                role = role.strip()
-                ans = ans.strip()
-                display_chat_bubble(role, ans, "left")
+                display_chat_bubble(role.strip(), ans.strip(), "left")
             else:
                 display_chat_bubble("回答", line, "left")
+
+# タイプライター風表示用関数
+def create_bubble(sender: str, message: str, align: str) -> str:
+    avatar_html = ""
+    display_sender = sender if sender != "あなた" else "ユーザー"
+    if display_sender in avatar_dict:
+        avatar = avatar_dict[display_sender]
+        if isinstance(avatar, str):
+            avatar_html = f"<span style='font-size: 24px;'>{avatar}</span> "
+        else:
+            img_str = get_image_base64(avatar)
+            avatar_html = f"<img src='data:image/png;base64,{img_str}' style='width:30px; height:30px; margin-right:5px;'>"
+    if align == "right":
+        return f"""
+        <div style="
+            background-color: #DCF8C6;
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            padding: 8px;
+            margin: 5px 0;
+            color: #000;
+            font-family: Arial, sans-serif;
+            text-align: right;
+            width: 50%;
+            float: right;
+            clear: both;
+        ">
+            {avatar_html}<strong>{display_sender}</strong>: {message} 😊
+        </div>
+        """
+    else:
+        return f"""
+        <div style="
+            background-color: #FFFACD;
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            padding: 8px;
+            margin: 5px 0;
+            color: #000;
+            font-family: Arial, sans-serif;
+            text-align: left;
+            width: 50%;
+            float: left;
+            clear: both;
+        ">
+            {avatar_html}<strong>{display_sender}</strong>: {message} 👍
+        </div>
+        """
+
+def typewriter_bubble(sender: str, full_text: str, align: str, delay: float = 0.05):
+    container = st.empty()
+    displayed_text = ""
+    for char in full_text:
+        displayed_text += char
+        container.markdown(create_bubble(sender, displayed_text, align), unsafe_allow_html=True)
+        time.sleep(delay)
+    container.markdown(create_bubble(sender, full_text, align), unsafe_allow_html=True)
 
 # ------------------------
 # Streamlit アプリ本体
@@ -374,19 +426,20 @@ if submitted:
         if "conversation_turns" not in st.session_state:
             st.session_state["conversation_turns"] = []
         user_text = user_message
-        # 初回: 4人の専門家が個別回答
+        # 初回は専門家の個別回答、以降は続きとして回答
         if len(st.session_state["conversation_turns"]) == 0:
             answer_text = generate_expert_answers(user_text)
         else:
-            # 2回目以降: 4人の専門家が続きとして回答
             context = "\n".join([
                 f"あなた: {turn['user']}\n回答: {turn['answer']}"
                 for turn in st.session_state["conversation_turns"]
             ])
             answer_text = continue_expert_answers(user_text, context)
-        
         st.session_state["conversation_turns"].append({"user": user_text, "answer": answer_text})
         conversation_container.markdown("### 会話履歴")
         display_conversation_turns(st.session_state["conversation_turns"])
+        # 最新の回答はタイプライター風に表示
+        display_chat_bubble("あなた", user_text, "right")
+        typewriter_bubble("回答", answer_text, "left")
     else:
         st.warning("発言を入力してください。")
