@@ -92,8 +92,9 @@ st.markdown(
 # ------------------------------------------------------------------
 with st.sidebar:
     user_name = st.text_input("あなたの名前を入力してください", value="愛媛県庁職員", key="sidebar_user_name")
-    consult_type = st.radio("相談タイプを選択してください", ("本人の相談", "他者の相談", "デリケートな相談"), key="sidebar_consult_type")
-    if st.button("改善策のレポート", key="report_sidebar_1"):
+    consult_type = st.radio("相談タイプを選択してください", 
+                            ("本人の相談", "他者の相談", "デリケートな相談"), key="sidebar_consult_type")
+    if st.button("改善策のレポート", key="report_sidebar"):
         if st.session_state.get("conversation_turns", []):
             all_turns = "\n".join([
                 f"あなた: {turn['user']}\n回答: {turn['answer']}"
@@ -126,7 +127,7 @@ if st.session_state.get("show_selection_form", False):
         ongoing_treatment = ""
         if treatment_history == "はい":
             ongoing_treatment = st.radio("現在も通院中ですか？", ["はい", "いいえ"], key="ongoing_form")
-        if st.button("選択内容を送信", key="submit_selection_1"):
+        if st.button("選択内容を送信", key="submit_selection"):
             selection_summary = (
                 f"【選択式相談フォーム】\n"
                 f"悩みの種類: {category}\n"
@@ -400,7 +401,7 @@ for idx, expert in enumerate(EXPERTS):
 conversation_container = st.empty()
 
 # ------------------------------------------------------------------
-# サイドバー：過去の会話履歴とサイドボタン
+# サイドバー：過去の会話履歴（簡易リスト）とサイドボタン
 # ------------------------------------------------------------------
 with st.sidebar:
     st.markdown("### 過去の会話")
@@ -439,22 +440,19 @@ with st.sidebar:
 # ------------------------------------------------------------------
 with st.container():
     st.markdown('<div class="fixed-input">', unsafe_allow_html=True)
+    # ここでは、1つのフォーム内にテキスト入力とアクション選択ラジオボタンを配置
     with st.form("chat_form", clear_on_submit=True):
         user_message = st.text_area("新たな発言を入力してください", placeholder="ここに入力", height=100, key="user_message")
-        col1, col2 = st.columns(2)
-        with col1:
-            send_button = st.form_submit_button("送信", key="send_button")
-        with col2:
-            continue_button = st.form_submit_button("続きを話す", key="continue_button")
+        action_choice = st.radio("アクションを選択してください", ("送信", "続きを話す"), key="action_choice")
+        submit_action = st.form_submit_button("実行", key="submit_action")
     st.markdown("</div>", unsafe_allow_html=True)
     
-    # 送信ボタン処理
-    if send_button:
+    if submit_action:
         if user_message.strip():
             if "conversation_turns" not in st.session_state:
                 st.session_state.conversation_turns = []
             user_text = user_message
-            if len(st.session_state.get("conversation_turns", [])) == 0:
+            if st.session_state.get("conversation_turns", []) == [] or action_choice == "送信":
                 answer_text = generate_expert_answers(user_text)
             else:
                 context = "\n".join([
@@ -469,17 +467,3 @@ with st.container():
             typewriter_bubble("回答", answer_text, "left")
         else:
             st.warning("発言を入力してください。")
-    
-    # 続きボタン処理（下部固定）
-    if continue_button:
-        if st.session_state.get("conversation_turns", []):
-            context = "\n".join([
-                f"あなた: {turn['user']}\n回答: {turn['answer']}"
-                for turn in st.session_state.get("conversation_turns", [])
-            ])
-            new_discussion = continue_discussion("続きをお願いします。", context)
-            st.session_state.conversation_turns.append({"user": "続き", "answer": new_discussion})
-            conversation_container.markdown("")
-            display_chat()
-        else:
-            st.warning("まずは会話を開始してください。")
