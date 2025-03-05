@@ -2,13 +2,12 @@ import streamlit as st
 import os
 import requests
 from PIL import Image
-from concurrent.futures import ThreadPoolExecutor
 
 # ---------------------------
 # グローバル設定
 # ---------------------------
 API_KEY = st.secrets["general"]["api_key"]
-MODEL_NAME = "gemini-2.0-flash-001"  # モデル名を指定
+MODEL_NAME = "gemini-2.0-flash-001"  # 指定されたモデル名
 
 # ---------------------------
 # Streamlitページ設定
@@ -148,7 +147,7 @@ def call_gemini_api(prompt_text: str) -> str:
     try:
         response = requests.post(url, headers=headers, json=payload, timeout=10)
         
-        # デバッグ用: レスポンスのステータスと内容を出力
+        # デバッグ用: レスポンスのステータスとJSONを表示
         st.write("DEBUG: Gemini API response status:", response.status_code)
         try:
             st.write("DEBUG: Gemini API response JSON:", response.json())
@@ -182,26 +181,21 @@ def build_prompt(user_input: str, character_name: str, role_desc: str) -> str:
     prompt = (
         f"あなたは{character_name}です。役割は「{role_desc}」です。\n"
         "以下の利用者の相談内容に対して、具体的なアドバイスや改善策を提示してください。\n"
-        "専門家として、具体的に回答をしてください。。\n"
+        "医療行為を行うのではなく、あくまで情報提供の範囲で、正確な知見に基づいた回答をお願いします。\n"
         "回答は日本語で簡潔に述べ、利用者に安心感や前向きな提案が伝わるようにしてください。\n\n"
         f"【利用者の相談】\n{user_input}\n"
     )
     return prompt
 
 # ---------------------------
-# マルチスレッドで4キャラクターの応答を取得
+# 4キャラクターの応答を逐次取得
 # ---------------------------
 def get_all_responses(user_input: str):
-    with ThreadPoolExecutor(max_workers=4) as executor:
-        future_dict = {}
-        for char_name, char_info in characters.items():
-            prompt = build_prompt(user_input, char_name, char_info["role_description"])
-            future_dict[char_name] = executor.submit(call_gemini_api, prompt)
-        
-        results = {}
-        for char_name, future in future_dict.items():
-            results[char_name] = future.result()
-        return results
+    results = {}
+    for char_name, char_info in characters.items():
+        prompt = build_prompt(user_input, char_name, char_info["role_description"])
+        results[char_name] = call_gemini_api(prompt)
+    return results
 
 # ---------------------------
 # チャット入力（日本語固定）
