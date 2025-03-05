@@ -88,35 +88,25 @@ st.markdown(
 )
 
 # ------------------------------------------------------------------
-# ユーザー情報入力（上部）
+# サイドバー：ユーザー情報＆相談タイプ＆改善策レポートボタン
 # ------------------------------------------------------------------
-user_name = st.text_input("あなたの名前を入力してください", value="愛媛県庁職員", key="user_name")
-# ※ AIの年齢入力は削除
-
-col1, col2 = st.columns([3, 1])
-with col1:
+with st.sidebar:
+    user_name = st.text_input("あなたの名前を入力してください", value="愛媛県庁職員", key="user_name")
     consult_type = st.radio("相談タイプを選択してください", ("本人の相談", "他者の相談", "デリケートな相談"), key="consult_type")
-with col2:
-    if st.button("選択式相談フォームを開く", key="open_form"):
-        st.session_state["show_selection_form"] = True
+    if st.button("改善策のレポート"):
+        if st.session_state.get("conversation_turns", []):
+            all_turns = "\n".join([
+                f"あなた: {turn['user']}\n回答: {turn['answer']}"
+                for turn in st.session_state.conversation_turns
+            ])
+            summary = generate_summary(all_turns)
+            st.session_state["summary"] = summary
+            st.markdown("**まとめ:**\n" + summary)
+        else:
+            st.warning("まずは会話を開始してください。")
 
 # ------------------------------------------------------------------
-# 定数／設定（APIキー、モデル、専門家）
-# ------------------------------------------------------------------
-API_KEY = st.secrets["general"]["api_key"]
-MODEL_NAME = "gemini-2.0-flash-001"
-EXPERTS = ["精神科医師", "カウンセラー", "メンタリスト", "内科医"]
-
-# ------------------------------------------------------------------
-# セッション初期化（チャット履歴／会話ターン管理）
-# ------------------------------------------------------------------
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-if "conversation_turns" not in st.session_state:
-    st.session_state.conversation_turns = []
-
-# ------------------------------------------------------------------
-# サイドバー：選択式相談フォーム（収納）と会話履歴の簡易表示
+# サイドバー：選択式相談フォーム（収納）
 # ------------------------------------------------------------------
 if st.session_state.get("show_selection_form", False):
     st.sidebar.header("選択式相談フォーム")
@@ -156,7 +146,7 @@ if st.session_state.get("show_selection_form", False):
             "answer": "選択式相談フォームの内容が送信され、反映されました。"
         })
         st.sidebar.success("送信しました！")
-        
+    # サイドバーに簡易会話履歴も表示
     st.sidebar.header("会話履歴")
     if st.session_state.conversation_turns:
         for turn in st.session_state.conversation_turns:
@@ -166,7 +156,7 @@ if st.session_state.get("show_selection_form", False):
         st.sidebar.info("まだ会話はありません。")
 
 # ------------------------------------------------------------------
-# キャラクター定義（固定：4人専門家のみ）
+# キャラクター定義（4人専門家）
 # ------------------------------------------------------------------
 EXPERTS = ["精神科医師", "カウンセラー", "メンタリスト", "内科医"]
 
@@ -255,7 +245,6 @@ def analyze_question(question: str) -> int:
     return score
 
 def adjust_parameters(question: str) -> dict:
-    # 固定中年向け設定
     params = {}
     params["精神科医師"] = {"style": "温かく落ち着いた", "detail": "豊富な経験に基づいた判断を下す"}
     if analyze_question(question) > 0:
@@ -287,7 +276,7 @@ def generate_expert_answers(question: str) -> str:
         "内科医: <回答>\n"
         "各回答は300～400文字程度で、自然な日本語で出力してください。"
     )
-    return truncate_text(call_gemini_api(prompt), 400)
+    return call_gemini_api(prompt)
 
 def continue_discussion(additional_input: str, current_turns: str) -> str:
     prompt = (
@@ -317,7 +306,7 @@ def display_chat():
     for msg in st.session_state.messages:
         role = msg["role"]
         content = msg["content"]
-        display_name = user_name if role == "user" else role
+        display_name = st.session_state.get("user_name", "ユーザー") if role == "user" else role
         if role == "user":
             with st.chat_message("user", avatar=avatar_img_dict.get("user")):
                 st.markdown(
@@ -393,40 +382,7 @@ def typewriter_bubble(sender: str, full_text: str, align: str, delay: float = 0.
 # ------------------------------------------------------------------
 # Streamlit アプリ本体（チャット部分）
 # ------------------------------------------------------------------
-st.title("メンタルケアボット")
-st.header("会話履歴")
-conversation_container = st.empty()
-
-# 改善策のレポートボタン
-if st.button("改善策のレポート"):
-    if st.session_state.get("conversation_turns", []):
-        all_turns = "\n".join([
-            f"あなた: {turn['user']}\n回答: {turn['answer']}"
-            for turn in st.session_state.conversation_turns
-        ])
-        summary = generate_summary(all_turns)
-        st.session_state["summary"] = summary
-        st.markdown("### 改善策のレポート\n" + "**まとめ:**\n" + summary)
-    else:
-        st.warning("まずは会話を開始してください。")
-
-# 続きボタン
-if st.button("続きを読み込む"):
-    if st.session_state.get("conversation_turns", []):
-        context = "\n".join([
-            f"あなた: {turn['user']}\n回答: {turn['answer']}"
-            for turn in st.session_state.conversation_turns
-        ])
-        new_answer = continue_discussion("続きをお願いします。", context)
-        st.session_state.conversation_turns.append({"user": "続き", "answer": new_answer})
-        conversation_container.markdown("### 会話履歴")
-        display_chat()
-    else:
-        st.warning("会話がありません。")
-
-# ------------------------------------------------------------------
-# 専門家キャラクターの固定表示（上部）
-# ------------------------------------------------------------------
+# メインエリア上部に、4人の専門家を横並びで表示
 st.markdown("### 専門家一覧")
 cols = st.columns(len(EXPERTS))
 for idx, expert in enumerate(EXPERTS):
@@ -437,8 +393,49 @@ for idx, expert in enumerate(EXPERTS):
         else:
             st.markdown("🤖")
 
+# チャットバブル表示エリア（ヘッダーは非表示）
+conversation_container = st.empty()
+
 # ------------------------------------------------------------------
-# ユーザー入力エリア（下部固定：LINE風チャットバー）
+# サイドバー：過去の会話履歴（簡易リスト）を表示
+with st.sidebar:
+    st.markdown("### 過去の会話")
+    if st.session_state.conversation_turns:
+        for turn in st.session_state.conversation_turns:
+            st.markdown(f"**あなた:** {turn['user'][:50]}...")
+            st.markdown(f"**回答:** {turn['answer'][:50]}...")
+    else:
+        st.info("まだ会話はありません。")
+
+# ------------------------------------------------------------------
+# 継続ボタン（改善策レポート、続きボタンはサイドバーに配置）
+with st.sidebar:
+    if st.button("改善策のレポート"):
+        if st.session_state.get("conversation_turns", []):
+            all_turns = "\n".join([
+                f"あなた: {turn['user']}\n回答: {turn['answer']}"
+                for turn in st.session_state.conversation_turns
+            ])
+            summary = generate_summary(all_turns)
+            st.session_state["summary"] = summary
+            st.markdown("**まとめ:**\n" + summary)
+        else:
+            st.warning("まずは会話を開始してください。")
+    if st.button("続きを読み込む"):
+        if st.session_state.get("conversation_turns", []):
+            context = "\n".join([
+                f"あなた: {turn['user']}\n回答: {turn['answer']}"
+                for turn in st.session_state.conversation_turns
+            ])
+            new_answer = continue_discussion("続きをお願いします。", context)
+            st.session_state.conversation_turns.append({"user": "続き", "answer": new_answer})
+            conversation_container.markdown("")
+            display_chat()
+        else:
+            st.warning("会話がありません。")
+
+# ------------------------------------------------------------------
+# 下部固定のユーザー入力エリア（LINE風チャットバー）
 # ------------------------------------------------------------------
 with st.container():
     st.markdown(
@@ -469,7 +466,7 @@ with st.container():
                 ])
                 answer_text = continue_discussion(user_text, context)
             st.session_state.conversation_turns.append({"user": user_text, "answer": answer_text})
-            conversation_container.markdown("### 会話履歴")
+            conversation_container.markdown("")
             display_chat()
             message(user_text, is_user=True)
             typewriter_bubble("回答", answer_text, "left")
@@ -485,7 +482,7 @@ with st.container():
             ])
             new_discussion = continue_discussion("続きをお願いします。", context)
             st.session_state.conversation_turns.append({"user": "続き", "answer": new_discussion})
-            conversation_container.markdown("### 会話履歴")
+            conversation_container.markdown("")
             display_chat()
         else:
             st.warning("まずは会話を開始してください。")
