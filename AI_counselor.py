@@ -127,7 +127,7 @@ def call_gemini_api(prompt_text: str) -> str:
     headers = {"Content-Type": "application/json"}
 
     try:
-        response = requests.post(url, headers=headers, json=payload, timeout=10)
+        response = requests.post(url, headers=headers, json=payload, timeout=20)
         if response.status_code == 200:
             data = response.json()
             gemini_output = data.get("candidates", [])
