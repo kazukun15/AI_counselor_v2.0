@@ -9,7 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 # グローバル設定
 # ---------------------------
 API_KEY = st.secrets["general"]["api_key"]
-MODEL_NAME = "gemini-2.0-flash-001"  # 指定されたモデル名
+MODEL_NAME = "gemini-2.0-flash-001"  # 使用するモデル名
 
 # ---------------------------
 # Streamlitページ設定
@@ -139,7 +139,7 @@ def build_prompt(user_input: str, character_name: str, role_desc: str) -> str:
     prompt = (
         f"あなたは{character_name}です。役割は「{role_desc}」です。\n"
         "以下の利用者の相談内容に対して、具体的なアドバイスや改善策を提示してください。\n"
-        "医療行為の範囲で正確な知見に基づいた回答をお願いします。\n"
+        "医療行為は行わず、あくまで情報提供の範囲で正確な知見に基づいた回答をお願いします。\n"
         "回答は日本語で簡潔に述べ、利用者に安心感や前向きな提案が伝わるようにしてください。\n\n"
         f"【利用者の相談】\n{user_input}\n"
     )
@@ -232,10 +232,19 @@ def create_pdf(report_text: str):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=15)
-    # fontsフォルダにあるNotoSansJP-VariableFont_wght.ttfを使用
+    # fontsフォルダにあるNotoSansJP-VariableFont_wght.ttfを使用（通常フォント）
     pdf.add_font("NotoSansJP", "", "fonts/NotoSansJP-VariableFont_wght.ttf", uni=True)
+    # 太字用フォントを登録
+    pdf.add_font("NotoSansJP", "B", "fonts/NotoSansJP-Bold.ttf", uni=True)
     pdf.set_font("NotoSansJP", "", 12)
-    # 全体テキストを1回で multi_cell で出力
+    
+    # まず見出し部分を太字で出力
+    pdf.set_font("NotoSansJP", "B", 14)
+    pdf.multi_cell(0, 10, txt="レポート")
+    pdf.ln(5)
+    
+    # 通常フォントに戻す
+    pdf.set_font("NotoSansJP", "", 12)
     pdf.multi_cell(0, 7, txt=report_text)
     pdf_data = pdf.output(dest="S")
     return bytes(pdf_data)
