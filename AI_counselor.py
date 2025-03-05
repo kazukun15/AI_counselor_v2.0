@@ -134,6 +134,7 @@ def call_gemini_api(prompt_text: str) -> str:
     Secretsファイルの [general] セクションから api_key を取得します。
     """
     api_key = st.secrets["general"]["api_key"]
+    # エンドポイントはモデル名 "gemini-2.0-flash" を利用
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
 
     payload = {
@@ -148,7 +149,7 @@ def call_gemini_api(prompt_text: str) -> str:
     try:
         response = requests.post(url, headers=headers, json=payload, timeout=10)
 
-        # --- デバッグ用にレスポンスを表示 ---
+        # デバッグ用：レスポンスのステータスコードとJSONを表示
         st.write("DEBUG: Gemini API response status:", response.status_code)
         try:
             st.write("DEBUG: Gemini API response JSON:", response.json())
@@ -190,17 +191,15 @@ def get_all_responses(user_input: str):
     """
     4キャラの回答を並列に取得して返す。
     """
-    # 4スレッド程度であれば十分高速化が期待できる
     with ThreadPoolExecutor(max_workers=4) as executor:
         future_dict = {}
         for char_name, char_info in characters.items():
             prompt = build_prompt(user_input, char_name, char_info["role_description"])
             future_dict[char_name] = executor.submit(call_gemini_api, prompt)
 
-        # スレッドの完了を待ちつつ結果をまとめる
         results = {}
         for char_name, future in future_dict.items():
-            results[char_name] = future.result()  # ここで実行結果を取得
+            results[char_name] = future.result()
         return results
 
 # ---------------------------
