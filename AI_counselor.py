@@ -19,7 +19,7 @@ st.title("メンタルケアボット V3.0")
 # ------------------------------------------------------------------
 try:
     try:
-        import tomllib  # Python 3.11以降の場合
+        import tomllib  # Python 3.11以降
     except ImportError:
         import toml as tomllib
     with open("config.toml", "rb") as f:
@@ -72,6 +72,16 @@ st.markdown(
         margin-bottom: 4px;
         color: {primaryColor};
     }}
+    /* 下部固定入力エリアの調整 */
+    .fixed-input {{
+        position: fixed;
+        bottom: 0;
+        width: 100%;
+        background: #FFF;
+        padding: 10px;
+        box-shadow: 0 -2px 5px rgba(0,0,0,0.1);
+        z-index: 100;
+    }}
     </style>
     """,
     unsafe_allow_html=True
@@ -81,7 +91,7 @@ st.markdown(
 # ユーザー情報入力（上部）
 # ------------------------------------------------------------------
 user_name = st.text_input("あなたの名前を入力してください", value="愛媛県庁職員", key="user_name")
-ai_age = st.number_input("AIの年齢を指定してください", min_value=1, value=30, step=1, key="ai_age")
+# ※ AIの年齢は削除
 
 col1, col2 = st.columns([3, 1])
 with col1:
@@ -106,29 +116,25 @@ if "conversation_turns" not in st.session_state:
     st.session_state.conversation_turns = []
 
 # ------------------------------------------------------------------
-# サイドバー：選択式相談フォーム（収納）
+# サイドバー：選択式相談フォーム（収納）と会話履歴表示
 # ------------------------------------------------------------------
 if st.session_state.get("show_selection_form", False):
     st.sidebar.header("選択式相談フォーム")
     category = st.sidebar.selectbox("悩みの種類", ["人間関係", "仕事", "家庭", "経済", "健康", "その他"], key="category")
-    
     st.sidebar.subheader("身体の状態")
     physical_status = st.sidebar.radio("身体の状態", ["良好", "普通", "不調"], key="physical")
-    physical_detail = st.sidebar.text_area("身体の状態の詳細", key="physical_detail", placeholder="具体的な症状や変化を記入")
+    physical_detail = st.sidebar.text_area("身体の状態の詳細", key="physical_detail", placeholder="具体的な症状や変化")
     physical_duration = st.sidebar.selectbox("身体の症状の持続期間", ["数日", "1週間", "1ヶ月以上", "不明"], key="physical_duration")
-    
     st.sidebar.subheader("心の状態")
     mental_status = st.sidebar.radio("心の状態", ["落ち着いている", "やや不安", "とても不安"], key="mental")
-    mental_detail = st.sidebar.text_area("心の状態の詳細", key="mental_detail", placeholder="感じる不安やストレスの内容を記入")
+    mental_detail = st.sidebar.text_area("心の状態の詳細", key="mental_detail", placeholder="感じる不安やストレス")
     mental_duration = st.sidebar.selectbox("心の症状の持続期間", ["数日", "1週間", "1ヶ月以上", "不明"], key="mental_duration")
-    
     stress_level = st.sidebar.slider("ストレスレベル (1-10)", 1, 10, 5, key="stress")
     recent_events = st.sidebar.text_area("最近の大きな出来事（任意）", key="events")
     treatment_history = st.sidebar.radio("通院歴がありますか？", ["はい", "いいえ"], key="treatment")
     ongoing_treatment = ""
     if treatment_history == "はい":
         ongoing_treatment = st.sidebar.radio("現在も通院中ですか？", ["はい", "いいえ"], key="ongoing")
-    
     if st.sidebar.button("選択内容を送信", key="submit_selection"):
         selection_summary = (
             f"【選択式相談フォーム】\n"
@@ -150,15 +156,24 @@ if st.session_state.get("show_selection_form", False):
             "answer": "選択式相談フォームの内容が送信され、反映されました。"
         })
         st.sidebar.success("送信しました！")
+        
+    # サイドバーに会話履歴を表示（簡易リスト）
+    st.sidebar.header("会話履歴")
+    if st.session_state.conversation_turns:
+        for turn in st.session_state.conversation_turns:
+            st.sidebar.markdown(f"**あなた:** {turn['user'][:50]}...")
+            st.sidebar.markdown(f"**回答:** {turn['answer'][:50]}...")
+    else:
+        st.sidebar.info("まだ会話はありません。")
 
 # ------------------------------------------------------------------
-# キャラクター定義（固定：4人専門家のみ）
+# キャラクター定義（4人専門家）
 # ------------------------------------------------------------------
-# 専門家として利用するのは「精神科医師」「カウンセラー」「メンタリスト」「内科医」
+# 利用するのは「精神科医師」「カウンセラー」「メンタリスト」「内科医」
 EXPERTS = ["精神科医師", "カウンセラー", "メンタリスト", "内科医"]
 
 # ------------------------------------------------------------------
-# アイコン画像の読み込み（avatars/ に配置、ユーザー用は削除）
+# アイコン画像の読み込み（avatars/ に配置、ユーザーは絵文字固定）
 # ------------------------------------------------------------------
 try:
     img_psychiatrist = Image.open("avatars/Psychiatrist.png")
@@ -173,7 +188,7 @@ except Exception as e:
     img_doctor = "💊"
 
 avatar_img_dict = {
-    "user": "👤",  # ユーザー用は絵文字で固定
+    "user": "👤",  # ユーザーは絵文字で固定
     "精神科医師": img_psychiatrist,
     "カウンセラー": img_counselor,
     "メンタリスト": img_mentalist,
@@ -241,40 +256,18 @@ def analyze_question(question: str) -> int:
             score -= 1
     return score
 
-def adjust_parameters(question: str, ai_age: int) -> dict:
-    score = analyze_question(question)
+def adjust_parameters(question: str) -> dict:
+    # AIの年齢は削除して、デフォルトの中年向け設定とする
     params = {}
-    if ai_age < 30:
-        params["精神科医師"] = {"style": "若々しいエネルギー", "detail": "最新の精神医学知識をもとに回答する"}
-        if score > 0:
-            params["カウンセラー"] = {"style": "共感的", "detail": "感情に寄り添いながら優しくサポートする"}
-            params["メンタリスト"] = {"style": "柔軟", "detail": "斬新な視点で新しい発想を提供する"}
-        else:
-            params["カウンセラー"] = {"style": "分析的", "detail": "冷静な視点で事実を丁寧に説明する"}
-            params["メンタリスト"] = {"style": "客観的", "detail": "多角的に問題を分析する"}
-    elif ai_age < 50:
-        params["精神科医師"] = {"style": "温かく落ち着いた", "detail": "豊富な経験に基づいた判断を下す"}
-        if score > 0:
-            params["カウンセラー"] = {"style": "共感的", "detail": "深い理解と共感で心に寄り添う"}
-            params["メンタリスト"] = {"style": "柔軟", "detail": "実務的な知見を活かした意見を提供する"}
-        else:
-            params["カウンセラー"] = {"style": "分析的", "detail": "論理的な視点で根拠をもって説明する"}
-            params["メンタリスト"] = {"style": "客観的", "detail": "中立的な観点から問題点を整理する"}
-    else:
-        params["精神科医師"] = {"style": "賢明で穏やかな", "detail": "豊富な経験と知識に基づいた落ち着いた判断を下す"}
-        if score > 0:
-            params["カウンセラー"] = {"style": "共感的", "detail": "深い洞察と共感を込めて優しくサポートする"}
-            params["メンタリスト"] = {"style": "柔軟", "detail": "多面的な知見から慎重に意見を述べる"}
-        else:
-            params["カウンセラー"] = {"style": "分析的", "detail": "経験に裏打ちされた緻密な説明を行う"}
-            params["メンタリスト"] = {"style": "客観的", "detail": "冷静に事実を整理して伝える"}
+    params["精神科医師"] = {"style": "温かく落ち着いた", "detail": "豊富な経験に基づいた判断を下す"}
+    params["カウンセラー"] = {"style": "共感的", "detail": "深い理解と共感で心に寄り添う"}
+    params["メンタリスト"] = {"style": "柔軟", "detail": "実務的な知見を活かした意見を提供する"}
     params["内科医"] = {"style": "実直な", "detail": "身体の不調や他の病気の有無を慎重にチェックする"}
     return params
 
-def generate_discussion(question: str, persona_params: dict, ai_age: int) -> str:
+def generate_discussion(question: str, persona_params: dict) -> str:
     current_user = st.session_state.get("user_name", "ユーザー")
     prompt = f"【{current_user}さんの質問】\n{question}\n\n"
-    prompt += f"このAIは{ai_age}歳として振る舞います。\n"
     for name, params in persona_params.items():
         prompt += f"{name}は【{params['style']}な視点】で、{params['detail']}。\n"
     prompt += (
@@ -424,11 +417,25 @@ if st.button("続きを読み込む"):
         st.warning("会話がありません。")
 
 # ------------------------------------------------------------------
-# ユーザー入力（下部固定）
+# 専門家キャラクターの表示（上部固定）
+# ------------------------------------------------------------------
+st.markdown("### 専門家一覧")
+cols = st.columns(len(EXPERTS))
+for idx, expert in enumerate(EXPERTS):
+    with cols[idx]:
+        st.markdown(f"**{expert}**")
+        # アバター画像を表示（画像が読み込まれていれば）
+        if expert in avatar_img_dict and not isinstance(avatar_img_dict[expert], str):
+            st.image(avatar_img_dict[expert], width=60)
+        else:
+            st.markdown("🤖")
+
+# ------------------------------------------------------------------
+# ユーザー入力エリア（下部固定）
 # ------------------------------------------------------------------
 with st.container():
     st.markdown(
-        '<div style="position: fixed; bottom: 0; width: 100%; background: #FFF; padding: 10px; box-shadow: 0 -2px 5px rgba(0,0,0,0.1);">',
+        '<div class="fixed-input">',
         unsafe_allow_html=True,
     )
     with st.form("chat_form", clear_on_submit=True):
@@ -447,23 +454,23 @@ with st.container():
                 st.session_state.conversation_turns = []
             user_text = user_message
             if len(st.session_state.conversation_turns) == 0:
-                answer_text = generate_expert_answers(user_text)
+                expert_params = adjust_parameters(user_message, 40)  # 固定値（40歳相当）で設定
+                answer_text = generate_discussion(user_message, expert_params, 40)
             else:
                 context = "\n".join([
                     f"あなた: {turn['user']}\n回答: {turn['answer']}"
                     for turn in st.session_state.conversation_turns
                 ])
-                answer_text = continue_discussion(user_text, context)
+                answer_text = continue_discussion(user_message, context)
             st.session_state.conversation_turns.append({"user": user_text, "answer": answer_text})
             conversation_container.markdown("### 会話履歴")
             display_chat()
-            # 最新の回答をタイプライター風に表示
             message(user_text, is_user=True)
             typewriter_bubble("回答", answer_text, "left")
         else:
             st.warning("発言を入力してください。")
     
-    # 続きボタン処理（固定フッター内）
+    # 続きボタン処理（下部固定）
     if continue_button:
         if st.session_state.get("conversation_turns", []):
             context = "\n".join([
