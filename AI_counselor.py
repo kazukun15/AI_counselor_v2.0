@@ -19,7 +19,7 @@ st.title("メンタルケアボット V3.0")
 # ------------------------------------------------------------------
 try:
     try:
-        import tomllib  # Python 3.11以降
+        import tomllib  # Python 3.11以降の場合
     except ImportError:
         import toml as tomllib
     with open("config.toml", "rb") as f:
@@ -82,6 +82,7 @@ st.markdown(
 # ------------------------------------------------------------------
 user_name = st.text_input("あなたの名前を入力してください", value="愛媛県庁職員", key="user_name")
 ai_age = st.number_input("AIの年齢を指定してください", min_value=1, value=30, step=1, key="ai_age")
+
 col1, col2 = st.columns([3, 1])
 with col1:
     consult_type = st.radio("相談タイプを選択してください", ("本人の相談", "他者の相談", "デリケートな相談"), key="consult_type")
@@ -110,20 +111,24 @@ if "conversation_turns" not in st.session_state:
 if st.session_state.get("show_selection_form", False):
     st.sidebar.header("選択式相談フォーム")
     category = st.sidebar.selectbox("悩みの種類", ["人間関係", "仕事", "家庭", "経済", "健康", "その他"], key="category")
+    
     st.sidebar.subheader("身体の状態")
     physical_status = st.sidebar.radio("身体の状態", ["良好", "普通", "不調"], key="physical")
-    physical_detail = st.sidebar.text_area("身体の状態の詳細", key="physical_detail", placeholder="具体的な症状や変化")
+    physical_detail = st.sidebar.text_area("身体の状態の詳細", key="physical_detail", placeholder="具体的な症状や変化を記入")
     physical_duration = st.sidebar.selectbox("身体の症状の持続期間", ["数日", "1週間", "1ヶ月以上", "不明"], key="physical_duration")
+    
     st.sidebar.subheader("心の状態")
     mental_status = st.sidebar.radio("心の状態", ["落ち着いている", "やや不安", "とても不安"], key="mental")
-    mental_detail = st.sidebar.text_area("心の状態の詳細", key="mental_detail", placeholder="感じる不安やストレス")
+    mental_detail = st.sidebar.text_area("心の状態の詳細", key="mental_detail", placeholder="感じる不安やストレスの内容を記入")
     mental_duration = st.sidebar.selectbox("心の症状の持続期間", ["数日", "1週間", "1ヶ月以上", "不明"], key="mental_duration")
+    
     stress_level = st.sidebar.slider("ストレスレベル (1-10)", 1, 10, 5, key="stress")
     recent_events = st.sidebar.text_area("最近の大きな出来事（任意）", key="events")
     treatment_history = st.sidebar.radio("通院歴がありますか？", ["はい", "いいえ"], key="treatment")
     ongoing_treatment = ""
     if treatment_history == "はい":
         ongoing_treatment = st.sidebar.radio("現在も通院中ですか？", ["はい", "いいえ"], key="ongoing")
+    
     if st.sidebar.button("選択内容を送信", key="submit_selection"):
         selection_summary = (
             f"【選択式相談フォーム】\n"
@@ -153,28 +158,27 @@ if st.session_state.get("show_selection_form", False):
 EXPERTS = ["精神科医師", "カウンセラー", "メンタリスト", "内科医"]
 
 # ------------------------------------------------------------------
-# アイコン画像の読み込み（avatars/ に配置）
+# アイコン画像の読み込み（avatars/ に配置、ユーザー用は削除）
 # ------------------------------------------------------------------
 try:
-    img_user = Image.open("avatars/user.png")
     img_psychiatrist = Image.open("avatars/Psychiatrist.png")
     img_counselor = Image.open("avatars/counselor.png")
     img_mentalist = Image.open("avatars/MENTALIST.png")
     img_doctor = Image.open("avatars/doctor.png")
 except Exception as e:
     st.error(f"画像読み込みエラー: {e}")
-    img_user = "👤"
     img_psychiatrist = "🧠"
     img_counselor = "👥"
     img_mentalist = "💡"
     img_doctor = "💊"
 
 avatar_img_dict = {
-    "user": img_user,
+    "user": "👤",  # ユーザー用は絵文字で固定
     "精神科医師": img_psychiatrist,
     "カウンセラー": img_counselor,
     "メンタリスト": img_mentalist,
     "内科医": img_doctor,
+    "assistant": "🤖",
 }
 
 def get_image_base64(image):
@@ -185,10 +189,15 @@ def get_image_base64(image):
     return base64.b64encode(buffered.getvalue()).decode()
 
 # ------------------------------------------------------------------
-# Gemini API 呼び出し関連関数（キャッシュで高速化）
+# Gemini API 呼び出し関連関数（キャッシュなし）
 # ------------------------------------------------------------------
-@st.experimental_memo(ttl=600)
-def cached_call_gemini_api(prompt: str) -> str:
+def remove_json_artifacts(text: str) -> str:
+    if not isinstance(text, str):
+        text = str(text) if text else ""
+    pattern = r"'parts': \[\{'text':.*?\}\], 'role': 'model'"
+    return re.sub(pattern, "", text, flags=re.DOTALL).strip()
+
+def call_gemini_api(prompt: str) -> str:
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL_NAME}:generateContent?key={API_KEY}"
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
     headers = {"Content-Type": "application/json"}
@@ -213,14 +222,9 @@ def cached_call_gemini_api(prompt: str) -> str:
         content_str = content_str.strip()
         if not content_str:
             return "回答が見つかりませんでした。(contentが空)"
-        pattern = r"'parts': \[\{'text':.*?\}\], 'role': 'model'"
-        return re.sub(pattern, "", content_str, flags=re.DOTALL).strip()
+        return remove_json_artifacts(content_str)
     except Exception as e:
         return f"エラー: レスポンス解析に失敗しました -> {str(e)}"
-
-def call_gemini_api(prompt: str) -> str:
-    # キャッシュ版を利用
-    return cached_call_gemini_api(prompt)
 
 # ------------------------------------------------------------------
 # 会話生成関連関数
@@ -266,12 +270,6 @@ def adjust_parameters(question: str, ai_age: int) -> dict:
             params["メンタリスト"] = {"style": "客観的", "detail": "冷静に事実を整理して伝える"}
     params["内科医"] = {"style": "実直な", "detail": "身体の不調や他の病気の有無を慎重にチェックする"}
     return params
-
-def generate_new_character() -> tuple:
-    if st.session_state.get("custom_new_char_name", "").strip() and st.session_state.get("custom_new_char_personality", "").strip():
-        return st.session_state["custom_new_char_name"].strip(), st.session_state["custom_new_char_personality"].strip()
-    # 今回は新キャラクターは利用しないので、空文字を返す
-    return "", ""
 
 def generate_discussion(question: str, persona_params: dict, ai_age: int) -> str:
     current_user = st.session_state.get("user_name", "ユーザー")
@@ -459,6 +457,7 @@ with st.container():
             st.session_state.conversation_turns.append({"user": user_text, "answer": answer_text})
             conversation_container.markdown("### 会話履歴")
             display_chat()
+            # 最新の回答をタイプライター風に表示
             message(user_text, is_user=True)
             typewriter_bubble("回答", answer_text, "left")
         else:
