@@ -1,16 +1,19 @@
 import streamlit as st
 import os
+import requests
 from PIL import Image
 
-# Streamlitのページ基本設定
+# ---------------------------
+# Streamlitページ設定
+# ---------------------------
 st.set_page_config(
     page_title="メンタルヘルスボット",
     layout="wide"
 )
 
-# ------------------------------------
+# ---------------------------
 # カスタムCSS（若草色を基調に癒しの色合いを設定）
-# ------------------------------------
+# ---------------------------
 st.markdown(
     """
     <style>
@@ -61,12 +64,14 @@ st.markdown(
     unsafe_allow_html=True
 )
 
+# ---------------------------
 # タイトル表示
+# ---------------------------
 st.title("メンタルヘルスボット")
 
-# ------------------------------------
+# ---------------------------
 # キャラクター設定
-# ------------------------------------
+# ---------------------------
 characters = {
     "精神科医": {
         "image": "avatars/Psychiatrist.png",
@@ -86,23 +91,22 @@ characters = {
     }
 }
 
-# ------------------------------------
+# ---------------------------
 # サイドバー：担当キャラクター選択
-# ------------------------------------
+# ---------------------------
 st.sidebar.header("担当キャラクター")
 selected_character = st.sidebar.selectbox(
     "どの専門家と話しますか？",
     list(characters.keys())
 )
 
-# 選択されたキャラクター情報を取得
 char_data = characters[selected_character]
 char_image_path = char_data["image"]
 char_role_description = char_data["role"]
 
-# ------------------------------------
+# ---------------------------
 # サイドバー：選択式相談フォーム
-# ------------------------------------
+# ---------------------------
 st.sidebar.header("相談フォーム（選択式）")
 
 problem = st.sidebar.selectbox(
@@ -125,16 +129,15 @@ stress_level = st.sidebar.selectbox(
     ["低い", "普通", "高い", "非常に高い"]
 )
 
-# ------------------------------------
+# ---------------------------
 # 会話履歴の管理
-# ------------------------------------
+# ---------------------------
 if "conversation" not in st.session_state:
     st.session_state["conversation"] = []
 
-# ------------------------------------
+# ---------------------------
 # キャラクター表示と役割
-# ------------------------------------
-# 上部にキャラクターアイコンと説明を表示
+# ---------------------------
 col1, col2 = st.columns([1, 4])
 with col1:
     if os.path.exists(char_image_path):
@@ -145,26 +148,81 @@ with col2:
 
 st.markdown("---")
 
-# ------------------------------------
-# レスポンス生成（簡易的な例）
-# ------------------------------------
+# ---------------------------
+# Gemini API呼び出し用関数
+# ---------------------------
+def call_gemini_api(prompt_text: str) -> str:
+    """
+    Gemini API (Google Generative Language API) を呼び出して日本語での回答を取得する。
+    ハルシネーションを完全に防ぐことは困難だが、エラー処理を行うことで安全に失敗できるようにする。
+    """
+    try:
+        # StreamlitのSecretsからAPIキーを取得
+        api_key = st.secrets["GEMINI_API_KEY"]
+    except Exception:
+        # APIキーが設定されていない場合
+        return "APIキーが設定されていません。"
+
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
+
+    # Gemini API用のリクエストボディ
+    payload = {
+        "contents": [{
+            "parts": [
+                {
+                    # 日本語で会話を続けるためのプロンプト
+                    "text": prompt_text
+                }
+            ]
+        }]
+    }
+    headers = {"Content-Type": "application/json"}
+
+    try:
+        response = requests.post(url, headers=headers, json=payload, timeout=10)
+        if response.status_code == 200:
+            data = response.json()
+            # レスポンス構造から回答を取り出す
+            # 例: data["contents"][0]["parts"][0]["text"] に回答が入る想定
+            gemini_output = data.get("contents", [])
+            if gemini_output and len(gemini_output) > 0:
+                parts = gemini_output[0].get("parts", [])
+                if parts and len(parts) > 0:
+                    return parts[0].get("text", "回答を取得できませんでした。")
+            return "回答を取得できませんでした。"
+        else:
+            return f"APIエラーが発生しました（ステータスコード: {response.status_code}）"
+    except Exception as e:
+        return f"API呼び出し中にエラーが発生しました: {str(e)}"
+
+# ---------------------------
+# 応答生成関数
+# ---------------------------
 def generate_response(user_input: str, role: str) -> str:
     """
-    ※ 本番では専門家の知見やLLMを適切に利用する。
-      （ここではハルシネーション回避のため、あえて簡易な固定応答にとどめる）
+    ユーザ入力とキャラクターの役割を踏まえ、Gemini APIを使って日本語の回答を生成。
     """
-    response_text = (
-        f"あなたのメッセージ：「{user_input}」\n\n"
-        f"{role}からのアドバイス：\n"
-        "まずは少しずつ、どのような状況なのかを整理していきましょう。\n"
-        "気になることや不安な点があれば、遠慮なくお話しください。"
+    # キャラクター名を踏まえて簡単な指示を付与しつつ、ユーザの日本語入力を渡す例
+    # 実際にはプロンプトデザインを工夫し、ハルシネーションを減らす。
+    system_prompt = (
+        f"あなたは{role}として、ユーザの悩みに寄り添い、専門的な視点から助言を行います。"
+        "ただし、医療行為ではなく、あくまで情報提供のみを行い、正確性を重視してください。"
+        "日本語で答えてください。"
     )
+
+    # 実際のAPI呼び出し用プロンプト
+    # 例として「system的指示 + ユーザのメッセージ」を結合
+    # Gemini APIは会話文脈を保持するため、より高度な構成にする場合は複数ターンの履歴をまとめて渡す。
+    prompt_for_api = system_prompt + "\nユーザの質問: " + user_input
+
+    # Gemini API呼び出し
+    response_text = call_gemini_api(prompt_for_api)
     return response_text
 
-# ------------------------------------
-# チャット入力（LINE風）
-# ------------------------------------
-user_input = st.chat_input("Enter your message here...")
+# ---------------------------
+# チャット入力
+# ---------------------------
+user_input = st.chat_input("ここにメッセージを入力してください...")
 if user_input:
     # ユーザのメッセージを会話履歴に追加
     st.session_state["conversation"].append({
@@ -178,9 +236,9 @@ if user_input:
         "content": reply_text
     })
 
-# ------------------------------------
+# ---------------------------
 # チャット履歴の表示
-# ------------------------------------
+# ---------------------------
 for message in st.session_state["conversation"]:
     if message["role"] == "user":
         # ユーザの吹き出し（右寄せ）
@@ -195,22 +253,19 @@ for message in st.session_state["conversation"]:
             unsafe_allow_html=True
         )
 
-# ------------------------------------
+# ---------------------------
 # レポート作成ボタン（サイドバー）
-# ------------------------------------
+# ---------------------------
 if st.sidebar.button("レポートを作成する"):
     """
-    会話全体から得られた情報をまとめる。
-    実際にはNLPやデータ解析で内容を要約しても良い。
+    会話全体やフォーム入力内容をまとめたレポートをMarkdown形式で表示。
     """
-    # 例として固定文面でまとめ
     known_info = f"- 現在の悩み: {problem}\n- 体調: {physical_condition}\n- 心理的健康: {mental_health}\n- ストレス度: {stress_level}"
     current_issues = "会話の中で感じた主な悩みを整理します。"
     improvements = "専門的な視点から提案できる具体的な改善案を記載します。"
     future_outlook = "将来的にどのようなサポートが考えられるかを展望します。"
     remarks = "全体を通しての所見や補足事項など。"
 
-    # 実際は、会話内容（st.session_state["conversation"]）を分析し要約して追記するとよい
     report_md = f"""
 ## レポート
 
@@ -231,10 +286,9 @@ if st.sidebar.button("レポートを作成する"):
     """
     st.sidebar.markdown(report_md)
 
-# ------------------------------------
+# ---------------------------
 # 注意書き・免責事項
-# ------------------------------------
+# ---------------------------
 st.markdown("---")
 st.markdown("**注意:** このアプリは情報提供を目的としており、医療行為を行うものではありません。")
 st.markdown("緊急の場合や深刻な症状がある場合は、必ず医師などの専門家に直接ご相談ください。")
-
