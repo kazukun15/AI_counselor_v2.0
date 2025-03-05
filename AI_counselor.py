@@ -146,7 +146,7 @@ def build_prompt(user_input: str, character_name: str, role_desc: str) -> str:
     prompt = (
         f"あなたは{character_name}です。役割は「{role_desc}」です。\n"
         "以下の利用者の相談内容に対して、具体的なアドバイスや改善策を提示してください。\n"
-        "医療行為を行い、正確な知見に基づいた回答をお願いします。\n"
+        "医療行為は行わず、あくまで情報提供の範囲で正確な知見に基づいた回答をお願いします。\n"
         "回答は日本語で簡潔に述べ、利用者に安心感や前向きな提案が伝わるようにしてください。\n\n"
         f"【利用者の相談】\n{user_input}\n"
     )
@@ -155,6 +155,8 @@ def build_prompt(user_input: str, character_name: str, role_desc: str) -> str:
 # ---------------------------
 # マルチスレッドで4キャラクターの応答を取得
 # ---------------------------
+from concurrent.futures import ThreadPoolExecutor
+
 def get_all_responses(user_input: str):
     results = {}
     with ThreadPoolExecutor(max_workers=4) as executor:
@@ -162,7 +164,7 @@ def get_all_responses(user_input: str):
         for char_name, char_info in characters.items():
             prompt = build_prompt(user_input, char_name, char_info["role_description"])
             future_dict[char_name] = executor.submit(call_gemini_api, prompt)
-        # スレッド結果を回収
+        
         for char_name, future in future_dict.items():
             results[char_name] = future.result()
     return results
@@ -195,7 +197,7 @@ for turn in st.session_state["conversation"]:
     st.write("---")
 
 # ---------------------------
-# レポート生成関数
+# レポート生成
 # ---------------------------
 def generate_report():
     # フォーム入力があれば取得、なければデフォルト
@@ -238,20 +240,19 @@ def generate_report():
     return report
 
 # ---------------------------
-# PDF生成関数（日本語フォント対応）
+# PDF生成 (日本語フォント対応)
 # ---------------------------
 def create_pdf(report_text: str):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=15)
     
-    # Unicode対応の日本語フォントを登録
-    # staticフォルダに "NotoSansJP-Regular.ttf" があると想定
-    pdf.add_font("NotoSansJP", "", "static/NotoSansJP-Regular.ttf", uni=True)
+    # 「fonts」フォルダに NotoSansJP-VariableFont_wght.ttf がある前提
+    pdf.add_font("NotoSansJP", "", "fonts/NotoSansJP-VariableFont_wght.ttf", uni=True)
     pdf.set_font("NotoSansJP", "", 12)
 
     for line in report_text.split("\n"):
-        pdf.cell(0, 7, txt=line, ln=True)  # 7 は行間の例
+        pdf.cell(0, 7, txt=line, ln=True)
     return pdf.output(dest="S").encode("latin1")
 
 # ---------------------------
@@ -270,9 +271,6 @@ if st.sidebar.button("PDFレポートをダウンロード"):
         mime="application/pdf"
     )
 
-# ---------------------------
-# 注意書き・免責事項
-# ---------------------------
 st.markdown("---")
 st.markdown("**注意:** このアプリは情報提供を目的としており、医療行為を行うものではありません。")
 st.markdown("緊急の場合や深刻な症状がある場合は、必ず医師などの専門家に直接ご相談ください。")
