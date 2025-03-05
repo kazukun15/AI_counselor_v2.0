@@ -10,6 +10,12 @@ from PIL import Image
 from streamlit_chat import message  # pip install streamlit-chat
 
 # ========================
+# ここでモデル名と API キーを設定
+# ========================
+MODEL_NAME = "gemini-2.0-flash"  # or "chat-bison-001" etc.
+API_KEY = st.secrets["general"]["api_key"]
+
+# ========================
 # ページ設定
 # ========================
 st.set_page_config(page_title="メンタルケアボット", layout="wide")
@@ -219,42 +225,54 @@ def get_image_base64(image):
     return base64.b64encode(buffered.getvalue()).decode()
 
 # ========================
-# Gemini API 呼び出し関連関数
+# Gemini API 呼び出し関数 (修正後)
 # ========================
-def remove_json_artifacts(text: str) -> str:
-    if not isinstance(text, str):
-        text = str(text) if text else ""
-    pattern = r"'parts': \[\{'text':.*?\}\], 'role': 'model'"
-    return re.sub(pattern, "", text, flags=re.DOTALL).strip()
-
 def call_gemini_api(prompt: str) -> str:
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL_NAME}:generateContent?key={st.secrets['general']['api_key']}"
-    payload = {"contents": [{"parts": [{"text": prompt}]}]}
-    headers = {"Content-Type": "application/json"}
+    """
+    Google Gemini (PaLM 2) APIを呼び出して回答を取得する関数。
+    モデル: gemini-2.0-flash
+    """
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL_NAME}:generateContent?key={API_KEY}"
+
+    # API リクエストのペイロード
+    payload = {
+        "contents": [
+            {
+                "parts": [
+                    {"text": prompt}
+                ]
+            }
+        ]
+    }
+    headers = {
+        "Content-Type": "application/json",
+    }
+
     try:
         response = requests.post(url, json=payload, headers=headers)
     except Exception as e:
         return f"エラー: リクエスト送信時に例外が発生しました -> {str(e)}"
+
     if response.status_code != 200:
         return f"エラー: ステータスコード {response.status_code} -> {response.text}"
-    try:
-        rjson = response.json()
-        candidates = rjson.get("candidates", [])
-        if not candidates:
-            return "回答が見つかりませんでした。(candidatesが空)"
-        candidate0 = candidates[0]
-        content_val = candidate0.get("content", "")
-        if isinstance(content_val, dict):
-            parts = content_val.get("parts", [])
-            content_str = " ".join([p.get("text", "") for p in parts])
-        else:
-            content_str = str(content_val)
-        content_str = content_str.strip()
-        if not content_str:
-            return "回答が見つかりませんでした。(contentが空)"
-        return remove_json_artifacts(content_str)
-    except Exception as e:
-        return f"エラー: レスポンス解析に失敗しました -> {str(e)}"
+
+    # レスポンス解析
+    data = response.json()
+    candidates = data.get("candidates", [])
+    if not candidates:
+        return "回答が見つかりませんでした。（candidatesが空）"
+
+    candidate0 = candidates[0]
+    content_val = candidate0.get("content")
+
+    # content_val が辞書 (parts) の場合を考慮
+    if isinstance(content_val, dict):
+        parts = content_val.get("parts", [])
+        content_str = "".join([p.get("text", "") for p in parts])
+    else:
+        content_str = str(content_val)
+
+    return content_str.strip() if content_str else "回答が空でした。"
 
 # ========================
 # 会話生成関連関数
@@ -291,6 +309,8 @@ def generate_expert_answers(question: str) -> str:
         consult_info = "この相談は、他者が抱える障害に関するものです。専門的かつ客観的な視点をお願いします。"
     else:
         consult_info = "この相談は本人が抱える悩みに関するものです。"
+
+    # プロンプト（4人の専門家の回答を一度に取得するイメージ）
     prompt = f"【{current_user}さんの質問】\n{question}\n\n{consult_info}\n"
     prompt += (
         "以下は、4人の専門家からの個別回答です。必ず以下の形式で出力してください:\n"
@@ -485,7 +505,9 @@ with st.container():
             st.session_state["conversation_turns"].append({"user": user_text, "answer": answer_text})
             conversation_container.markdown("")
             display_chat()
+            # ユーザー側メッセージ
             message(user_text, is_user=True)
+            # 回答をタイプライター演出
             typewriter_bubble("回答", answer_text, "left")
         else:
             st.warning("メッセージを入力してください。")
