@@ -2,6 +2,7 @@ import streamlit as st
 import os
 import requests
 from PIL import Image
+from concurrent.futures import ThreadPoolExecutor
 
 # ---------------------------
 # Streamlitページ設定
@@ -132,7 +133,6 @@ def call_gemini_api(prompt_text: str) -> str:
     Gemini API (Google Generative Language API) を呼び出して日本語での回答を取得します。
     Secretsファイルの [general] セクションから api_key を取得します。
     """
-    # [general] セクションの api_key を取得
     api_key = st.secrets["general"]["api_key"]
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
 
@@ -147,6 +147,14 @@ def call_gemini_api(prompt_text: str) -> str:
 
     try:
         response = requests.post(url, headers=headers, json=payload, timeout=10)
+
+        # --- デバッグ用にレスポンスを表示 ---
+        st.write("DEBUG: Gemini API response status:", response.status_code)
+        try:
+            st.write("DEBUG: Gemini API response JSON:", response.json())
+        except:
+            st.write("DEBUG: Could not parse JSON from response.")
+
         if response.status_code == 200:
             data = response.json()
             gemini_output = data.get("contents", [])
@@ -161,35 +169,47 @@ def call_gemini_api(prompt_text: str) -> str:
         return f"API呼び出しエラー: {str(e)}"
 
 # ---------------------------
-# 応答生成関数（各キャラクター用）
+# 応答生成用のプロンプト関数
 # ---------------------------
-def generate_response_for_character(user_input: str, character_name: str, role_desc: str) -> str:
+def build_prompt(user_input: str, character_name: str, role_desc: str) -> str:
     """
-    ユーザ入力とキャラクターの役割を踏まえて、Gemini APIを使い日本語で回答を生成します。
+    各キャラクター向けのプロンプト文字列を生成
     """
-    system_prompt = (
+    return (
         f"あなたは{character_name}です。役割は「{role_desc}」です。\n"
         "ユーザの悩みに寄り添い、専門的な視点から助言を行います。\n"
         "ただし、医療行為ではなく、あくまで情報提供のみを行い、正確性を重視してください。\n"
         "日本語で答えてください。\n\n"
         f"【ユーザのメッセージ】\n{user_input}\n"
     )
-    return call_gemini_api(system_prompt)
+
+# ---------------------------
+# マルチスレッドで4キャラクターの応答を取得
+# ---------------------------
+def get_all_responses(user_input: str):
+    """
+    4キャラの回答を並列に取得して返す。
+    """
+    # 4スレッド程度であれば十分高速化が期待できる
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        future_dict = {}
+        for char_name, char_info in characters.items():
+            prompt = build_prompt(user_input, char_name, char_info["role_description"])
+            future_dict[char_name] = executor.submit(call_gemini_api, prompt)
+
+        # スレッドの完了を待ちつつ結果をまとめる
+        results = {}
+        for char_name, future in future_dict.items():
+            results[char_name] = future.result()  # ここで実行結果を取得
+        return results
 
 # ---------------------------
 # チャット入力（日本語固定）
 # ---------------------------
 user_input = st.chat_input("ここにメッセージを入力してください...")
 if user_input:
-    # 4人分の回答を生成
-    responses = {}
-    for char_name, char_info in characters.items():
-        answer = generate_response_for_character(
-            user_input,
-            char_name,
-            char_info["role_description"]
-        )
-        responses[char_name] = answer
+    # 並列実行で4人分の回答をまとめて取得
+    responses = get_all_responses(user_input)
 
     # 統一した形式で会話履歴に追加
     st.session_state["conversation"].append({
