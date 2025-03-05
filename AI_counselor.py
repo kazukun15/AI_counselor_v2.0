@@ -182,7 +182,7 @@ def build_prompt(user_input: str, character_name: str, role_desc: str) -> str:
     prompt = (
         f"あなたは{character_name}です。役割は「{role_desc}」です。\n"
         "以下の利用者の相談内容に対して、具体的なアドバイスや改善策を提示してください。\n"
-        "医療行為を行うのではなく、あくまで情報提供の範囲で正確な知見に基づいた回答をお願いします。\n"
+        "専門家として、具体的に回答をしてください。。\n"
         "回答は日本語で簡潔に述べ、利用者に安心感や前向きな提案が伝わるようにしてください。\n\n"
         f"【利用者の相談】\n{user_input}\n"
     )
