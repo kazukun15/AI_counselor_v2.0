@@ -2,7 +2,8 @@ import streamlit as st
 import os
 import requests
 from PIL import Image
-from fpdf import FPDF  # PDF生成用ライブラリ
+from fpdf import FPDF
+from concurrent.futures import ThreadPoolExecutor
 
 # ---------------------------
 # グローバル設定
@@ -36,15 +37,24 @@ st.markdown(
         word-wrap: break-word;
     }
     /* ユーザの吹き出し（右寄せ、淡い緑系） */
-    .user-bubble { background-color: #dcf8c6; text-align: right; float: right; clear: both; }
+    .user-bubble {
+        background-color: #dcf8c6;
+        text-align: right;
+        float: right;
+        clear: both;
+    }
     /* キャラクターの吹き出し（左寄せ、白ベース） */
-    .character-bubble { background-color: #ffffff; text-align: left; float: left; clear: both; }
+    .character-bubble {
+        background-color: #ffffff;
+        text-align: left;
+        float: left;
+        clear: both;
+    }
     /* キャラクターアイコンを円形に */
     .character-icon { border-radius: 50%; width: 60px; height: 60px; object-fit: cover; }
-    /* タイトルなどの中央寄せ */
-    .center { text-align: center; }
     </style>
-    """, unsafe_allow_html=True
+    """,
+    unsafe_allow_html=True
 )
 
 # ---------------------------
@@ -75,7 +85,7 @@ characters = {
 }
 
 # ---------------------------
-# サイドバー：相談フォーム（フォーム化）
+# サイドバー：相談フォーム
 # ---------------------------
 with st.sidebar.form(key="consultation_form"):
     st.markdown("### 相談フォーム")
@@ -84,7 +94,7 @@ with st.sidebar.form(key="consultation_form"):
     form_mental = st.selectbox("心理的健康", ["安定", "やや不安定", "不安定", "かなり不安定"])
     form_stress = st.selectbox("ストレス度", ["低い", "普通", "高い", "非常に高い"])
     form_submitted = st.form_submit_button(label="送信")
-    
+
 if form_submitted:
     st.session_state["form_data"] = {
         "problem": form_problem,
@@ -104,9 +114,13 @@ if "conversation" not in st.session_state:
 # Gemini API 呼び出し用関数
 # ---------------------------
 def call_gemini_api(prompt_text: str) -> str:
+    """
+    Gemini API を呼び出し、指定されたプロンプトに基づく回答を取得します。
+    """
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL_NAME}:generateContent?key={API_KEY}"
     payload = {"contents": [{"parts": [{"text": prompt_text}]}]}
     headers = {"Content-Type": "application/json"}
+
     try:
         response = requests.post(url, headers=headers, json=payload, timeout=10)
         if response.status_code == 200:
@@ -126,6 +140,9 @@ def call_gemini_api(prompt_text: str) -> str:
 # 応答生成用のプロンプト関数
 # ---------------------------
 def build_prompt(user_input: str, character_name: str, role_desc: str) -> str:
+    """
+    各キャラクター向けのプロンプトを生成。
+    """
     prompt = (
         f"あなたは{character_name}です。役割は「{role_desc}」です。\n"
         "以下の利用者の相談内容に対して、具体的なアドバイスや改善策を提示してください。\n"
@@ -136,23 +153,28 @@ def build_prompt(user_input: str, character_name: str, role_desc: str) -> str:
     return prompt
 
 # ---------------------------
-# 4キャラクターの応答を逐次取得
+# マルチスレッドで4キャラクターの応答を取得
 # ---------------------------
 def get_all_responses(user_input: str):
     results = {}
-    for char_name, char_info in characters.items():
-        prompt = build_prompt(user_input, char_name, char_info["role_description"])
-        results[char_name] = call_gemini_api(prompt)
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        future_dict = {}
+        for char_name, char_info in characters.items():
+            prompt = build_prompt(user_input, char_name, char_info["role_description"])
+            future_dict[char_name] = executor.submit(call_gemini_api, prompt)
+        # スレッド結果を回収
+        for char_name, future in future_dict.items():
+            results[char_name] = future.result()
     return results
 
 # ---------------------------
 # チャット入力（日本語固定）
 # ---------------------------
-user_chat = st.chat_input("ここにメッセージを入力してください...")
-if user_chat:
-    responses = get_all_responses(user_chat)
+user_input = st.chat_input("ここにメッセージを入力してください...")
+if user_input:
+    responses = get_all_responses(user_input)
     st.session_state["conversation"].append({
-        "user": user_chat,
+        "user": user_input,
         "responses": responses
     })
 
@@ -173,15 +195,15 @@ for turn in st.session_state["conversation"]:
     st.write("---")
 
 # ---------------------------
-# レポート生成とPDF出力
+# レポート生成関数
 # ---------------------------
 def generate_report():
-    # フォーム入力があれば取得、なければダミー文字列
+    # フォーム入力があれば取得、なければデフォルト
     form_data = st.session_state.get("form_data", {
-        "problem": "不明",
-        "physical": "不明",
-        "mental": "不明",
-        "stress": "不明"
+        "problem": "未入力",
+        "physical": "未入力",
+        "mental": "未入力",
+        "stress": "未入力"
     })
     
     # 会話履歴をテキストにまとめる
@@ -205,37 +227,52 @@ def generate_report():
 {conversation_text}
 
 ## 具体的な対策案
-（ここに各専門家の回答内容を踏まえた、具体的な改善策や対策をまとめます。）
+(ここに各専門家の回答を踏まえた改善策やアドバイスをまとめる)
 
 ## 今後の対策・展望
-（ここに今後の対策や、将来的なサポート体制、展望などを記載します。）
+(将来的なサポートや目標などを記載)
 
 ## 所見
-（全体を通しての所見や補足事項を記載します。）
-    """
+(全体を通した所見や補足事項)
+"""
     return report
 
-report_text = generate_report()
-st.sidebar.markdown("### レポート")
-st.sidebar.markdown(report_text)
-
-# PDF生成（fpdf2を使用）
+# ---------------------------
+# PDF生成関数（日本語フォント対応）
+# ---------------------------
 def create_pdf(report_text: str):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=15)
-    pdf.set_font("Arial", size=12)
     
-    # 改行で分割してPDFに書き込み
+    # Unicode対応の日本語フォントを登録
+    # staticフォルダに "NotoSansJP-Regular.ttf" があると想定
+    pdf.add_font("NotoSansJP", "", "static/NotoSansJP-Regular.ttf", uni=True)
+    pdf.set_font("NotoSansJP", "", 12)
+
     for line in report_text.split("\n"):
-        pdf.cell(0, 10, txt=line, ln=True)
-    return pdf.output(dest="S").encode("latin1")  # Sモードでバイナリデータを取得
+        pdf.cell(0, 7, txt=line, ln=True)  # 7 は行間の例
+    return pdf.output(dest="S").encode("latin1")
+
+# ---------------------------
+# サイドバーでレポート表示＆PDF出力
+# ---------------------------
+st.sidebar.markdown("### レポート")
+report_text = generate_report()
+st.sidebar.markdown(report_text)
 
 if st.sidebar.button("PDFレポートをダウンロード"):
-    report_text = generate_report()
     pdf_data = create_pdf(report_text)
-    st.sidebar.download_button(label="PDFをダウンロード", data=pdf_data, file_name="report.pdf", mime="application/pdf")
+    st.sidebar.download_button(
+        label="PDFをダウンロード",
+        data=pdf_data,
+        file_name="report.pdf",
+        mime="application/pdf"
+    )
 
+# ---------------------------
+# 注意書き・免責事項
+# ---------------------------
 st.markdown("---")
 st.markdown("**注意:** このアプリは情報提供を目的としており、医療行為を行うものではありません。")
 st.markdown("緊急の場合や深刻な症状がある場合は、必ず医師などの専門家に直接ご相談ください。")
