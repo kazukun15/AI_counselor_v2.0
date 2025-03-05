@@ -5,6 +5,12 @@ from PIL import Image
 from concurrent.futures import ThreadPoolExecutor
 
 # ---------------------------
+# グローバル設定
+# ---------------------------
+API_KEY = st.secrets["general"]["api_key"]
+MODEL_NAME = "gemini-2.0-flash-001"  # モデル名を指定
+
+# ---------------------------
 # Streamlitページ設定
 # ---------------------------
 st.set_page_config(
@@ -77,19 +83,19 @@ st.title("メンタルヘルスボット")
 characters = {
     "精神科医": {
         "image": "avatars/Psychiatrist.png",
-        "role_description": "専門知識をもとに改善案を提示する"
+        "role_description": "専門知識に基づき、現状の症状や悩みを整理し、改善のための具体的なアドバイスを提示します。"
     },
     "心理カウンセラー": {
         "image": "avatars/counselor.png",
-        "role_description": "専門知識を元に心に寄り添う"
+        "role_description": "利用者の心情に寄り添い、安心感を与えながら、対話を通じたサポートを行います。"
     },
     "メンタリスト": {
         "image": "avatars/MENTALIST.png",
-        "role_description": "メンタリストの経験をもとに新たな発想で改善案を提示する"
+        "role_description": "独自の視点と経験から、柔軟な発想で問題解決のヒントや新たな視点を提供します。"
     },
     "内科医": {
         "image": "avatars/doctor.png",
-        "role_description": "精神以外の内科的な不調を探り、改善案を提示する"
+        "role_description": "精神面だけでなく、身体的な不調にも着目し、総合的な健康状態の改善策を示します。"
     }
 }
 
@@ -121,41 +127,34 @@ stress_level = st.sidebar.selectbox(
 # ---------------------------
 # 会話履歴の管理（統一した形式）
 # ---------------------------
-# 各ターンは {"user": ユーザ入力, "responses": {各キャラクターの回答}} の形式で保存
 if "conversation" not in st.session_state:
     st.session_state["conversation"] = []
 
 # ---------------------------
-# Gemini API呼び出し用関数
+# Gemini API 呼び出し用関数
 # ---------------------------
 def call_gemini_api(prompt_text: str) -> str:
     """
-    Gemini API (Google Generative Language API) を呼び出して日本語での回答を取得します。
-    Secretsファイルの [general] セクションから api_key を取得します。
+    Gemini API を呼び出し、指定されたプロンプトに基づく回答を取得します。
     """
-    api_key = st.secrets["general"]["api_key"]
-    # エンドポイントはモデル名 "gemini-2.0-flash" を利用
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
-
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL_NAME}:generateContent?key={API_KEY}"
     payload = {
         "contents": [{
-            "parts": [
-                {"text": prompt_text}
-            ]
+            "parts": [{"text": prompt_text}]
         }]
     }
     headers = {"Content-Type": "application/json"}
-
+    
     try:
         response = requests.post(url, headers=headers, json=payload, timeout=10)
-
-        # デバッグ用：レスポンスのステータスコードとJSONを表示
+        
+        # デバッグ用: レスポンスのステータスと内容を出力
         st.write("DEBUG: Gemini API response status:", response.status_code)
         try:
             st.write("DEBUG: Gemini API response JSON:", response.json())
-        except:
-            st.write("DEBUG: Could not parse JSON from response.")
-
+        except Exception as e:
+            st.write("DEBUG: レスポンスのJSON解析に失敗しました。", e)
+        
         if response.status_code == 200:
             data = response.json()
             gemini_output = data.get("contents", [])
@@ -174,29 +173,31 @@ def call_gemini_api(prompt_text: str) -> str:
 # ---------------------------
 def build_prompt(user_input: str, character_name: str, role_desc: str) -> str:
     """
-    各キャラクター向けのプロンプト文字列を生成
+    各キャラクター向けのプロンプトを生成します。
+    例:
+    「あなたは【精神科医】です。あなたの役割は、利用者の悩みや症状を整理し、具体的な改善策を提案することです。
+    以下の相談に対して、専門知識に基づくアドバイスを日本語で提供してください。
+    【利用者の相談】・・・」
     """
-    return (
+    prompt = (
         f"あなたは{character_name}です。役割は「{role_desc}」です。\n"
-        "ユーザの悩みに寄り添い、専門的な視点から助言を行います。\n"
-        "ただし、医療行為ではなく、あくまで情報提供のみを行い、正確性を重視してください。\n"
-        "日本語で答えてください。\n\n"
-        f"【ユーザのメッセージ】\n{user_input}\n"
+        "以下の利用者の相談内容に対して、具体的なアドバイスや改善策を提示してください。\n"
+        "医療行為を行うのではなく、あくまで情報提供の範囲で正確な知見に基づいた回答をお願いします。\n"
+        "回答は日本語で簡潔に述べ、利用者に安心感や前向きな提案が伝わるようにしてください。\n\n"
+        f"【利用者の相談】\n{user_input}\n"
     )
+    return prompt
 
 # ---------------------------
 # マルチスレッドで4キャラクターの応答を取得
 # ---------------------------
 def get_all_responses(user_input: str):
-    """
-    4キャラの回答を並列に取得して返す。
-    """
     with ThreadPoolExecutor(max_workers=4) as executor:
         future_dict = {}
         for char_name, char_info in characters.items():
             prompt = build_prompt(user_input, char_name, char_info["role_description"])
             future_dict[char_name] = executor.submit(call_gemini_api, prompt)
-
+        
         results = {}
         for char_name, future in future_dict.items():
             results[char_name] = future.result()
@@ -207,10 +208,7 @@ def get_all_responses(user_input: str):
 # ---------------------------
 user_input = st.chat_input("ここにメッセージを入力してください...")
 if user_input:
-    # 並列実行で4人分の回答をまとめて取得
     responses = get_all_responses(user_input)
-
-    # 統一した形式で会話履歴に追加
     st.session_state["conversation"].append({
         "user": user_input,
         "responses": responses
@@ -220,17 +218,14 @@ if user_input:
 # チャット履歴の表示
 # ---------------------------
 for turn in st.session_state["conversation"]:
-    # ユーザの発言（右寄せ）
     st.markdown(
         f"<div class='bubble user-bubble'>{turn['user']}</div><br><br>",
         unsafe_allow_html=True
     )
-    # 4人の回答を横並びに表示
     cols = st.columns(4)
     i = 0
     for char_name in characters:
         with cols[i]:
-            # キャラクター画像の表示
             image_path = characters[char_name]["image"]
             if os.path.exists(image_path):
                 char_img = Image.open(image_path)
@@ -249,7 +244,7 @@ for turn in st.session_state["conversation"]:
 if st.sidebar.button("レポートを作成する"):
     known_info = f"- 現在の悩み: {problem}\n- 体調: {physical_condition}\n- 心理的健康: {mental_health}\n- ストレス度: {stress_level}"
     current_issues = "会話の中で感じた主な悩みを整理します。"
-    improvements = "専門的な視点から提案できる具体的な改善案を記載します。"
+    improvements = "専門的な視点から提案できる具体的な改善策を記載します。"
     future_outlook = "将来的にどのようなサポートが考えられるかを展望します。"
     remarks = "全体を通しての所見や補足事項など。"
 
@@ -262,7 +257,7 @@ if st.sidebar.button("レポートを作成する"):
 ### 現在の悩み
 {current_issues}
 
-### 具体的な改善案
+### 具体的な改善策
 {improvements}
 
 ### 将来的な展望
