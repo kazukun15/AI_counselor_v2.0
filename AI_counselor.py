@@ -226,18 +226,19 @@ def generate_report():
     return report
 
 # ---------------------------
-# PDF生成 (日本語フォント対応)
+# PDF生成 (日本語フォント対応、テキスト折り返し対応)
 # ---------------------------
 def create_pdf(report_text: str):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=15)
-    # fontsフォルダに NotoSansJP-VariableFont_wght.ttf がある前提
+    # fontsフォルダにあるNotoSansJP-VariableFont_wght.ttfを使用
     pdf.add_font("NotoSansJP", "", "fonts/NotoSansJP-VariableFont_wght.ttf", uni=True)
     pdf.set_font("NotoSansJP", "", 12)
+    
+    # multi_cell を使って自動改行
     for line in report_text.split("\n"):
-        pdf.cell(0, 7, txt=line, ln=True)
-    # FPDF.output(dest="S") が bytearray を返す場合は、明示的に bytes() に変換
+        pdf.multi_cell(0, 7, txt=line)
     pdf_data = pdf.output(dest="S")
     return bytes(pdf_data)
 
