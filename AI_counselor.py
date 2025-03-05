@@ -12,10 +12,7 @@ MODEL_NAME = "gemini-2.0-flash-001"  # 指定されたモデル名
 # ---------------------------
 # Streamlitページ設定
 # ---------------------------
-st.set_page_config(
-    page_title="メンタルヘルスボット",
-    layout="wide"
-)
+st.set_page_config(page_title="メンタルヘルスボット", layout="wide")
 
 # ---------------------------
 # カスタムCSS（若草色を基調に癒しの色合いを設定）
@@ -130,26 +127,20 @@ if "conversation" not in st.session_state:
     st.session_state["conversation"] = []
 
 # ---------------------------
-# Gemini API 呼び出し用関数（逐次実行）
+# Gemini API 呼び出し用関数
 # ---------------------------
 def call_gemini_api(prompt_text: str) -> str:
     """
     Gemini API を呼び出し、指定されたプロンプトに基づく回答を取得します。
     """
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL_NAME}:generateContent?key={API_KEY}"
-    payload = {
-        "contents": [{
-            "parts": [{"text": prompt_text}]
-        }]
-    }
+    payload = {"contents": [{"parts": [{"text": prompt_text}]}]}
     headers = {"Content-Type": "application/json"}
     
     try:
         response = requests.post(url, headers=headers, json=payload, timeout=10)
-        st.write("DEBUG: Gemini API response status:", response.status_code)
         if response.status_code == 200:
             data = response.json()
-            # ここを "candidates" キーを使用して回答を取得するように修正
             gemini_output = data.get("candidates", [])
             if gemini_output and len(gemini_output) > 0:
                 parts = gemini_output[0].get("content", {}).get("parts", [])
@@ -171,7 +162,7 @@ def build_prompt(user_input: str, character_name: str, role_desc: str) -> str:
     prompt = (
         f"あなたは{character_name}です。役割は「{role_desc}」です。\n"
         "以下の利用者の相談内容に対して、具体的なアドバイスや改善策を提示してください。\n"
-        "医療行為の範囲で正確な知見に基づいた回答をお願いします。\n"
+        "医療行為は行わず、あくまで情報提供の範囲で正確な知見に基づいた回答をお願いします。\n"
         "回答は日本語で簡潔に述べ、利用者に安心感や前向きな提案が伝わるようにしてください。\n\n"
         f"【利用者の相談】\n{user_input}\n"
     )
@@ -199,17 +190,17 @@ if user_input:
     })
 
 # ---------------------------
-# チャット履歴の表示
+# チャット履歴の表示（タブ形式）
 # ---------------------------
 for turn in st.session_state["conversation"]:
     st.markdown(
         f"<div class='bubble user-bubble'>{turn['user']}</div><br><br>",
         unsafe_allow_html=True
     )
-    cols = st.columns(4)
-    i = 0
-    for char_name in characters:
-        with cols[i]:
+    # タブを作成し、各キャラクターの回答を表示
+    tabs = st.tabs(list(characters.keys()))
+    for idx, char_name in enumerate(characters.keys()):
+        with tabs[idx]:
             image_path = characters[char_name]["image"]
             if os.path.exists(image_path):
                 char_img = Image.open(image_path)
@@ -219,7 +210,6 @@ for turn in st.session_state["conversation"]:
                 f"<div class='bubble character-bubble'>{turn['responses'][char_name]}</div>",
                 unsafe_allow_html=True
             )
-        i += 1
     st.write("---")
 
 # ---------------------------
@@ -231,7 +221,6 @@ if st.sidebar.button("レポートを作成する"):
     improvements = "専門的な視点から提案できる具体的な改善策を記載します。"
     future_outlook = "将来的にどのようなサポートが考えられるかを展望します。"
     remarks = "全体を通しての所見や補足事項など。"
-
     report_md = f"""
 ## レポート
 
@@ -252,9 +241,6 @@ if st.sidebar.button("レポートを作成する"):
     """
     st.sidebar.markdown(report_md)
 
-# ---------------------------
-# 注意書き・免責事項
-# ---------------------------
 st.markdown("---")
 st.markdown("**注意:** このアプリは情報提供を目的としており、医療行為を行うものではありません。")
 st.markdown("緊急の場合や深刻な症状がある場合は、必ず医師などの専門家に直接ご相談ください。")
