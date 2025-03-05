@@ -137,7 +137,7 @@ def call_gemini_api(prompt_text: str) -> str:
 # ---------------------------
 def build_prompt(user_input: str, character_name: str, role_desc: str) -> str:
     prompt = (
-        f"あなたは{character_name}です。役割は「{role_desc}」です。\n"
+        f"あなたは**{character_name}**です。役割は「{role_desc}」です。\n"
         "以下の利用者の相談内容に対して、具体的なアドバイスや改善策を提示してください。\n"
         "医療行為は行わず、あくまで情報提供の範囲で正確な知見に基づいた回答をお願いします。\n"
         "回答は日本語で簡潔に述べ、利用者に安心感や前向きな提案が伝わるようにしてください。\n\n"
@@ -187,7 +187,7 @@ for turn in st.session_state["conversation"]:
     st.write("---")
 
 # ---------------------------
-# レポート生成関数
+# レポート生成関数 (Markdown形式を改善)
 # ---------------------------
 def generate_report():
     form_data = st.session_state.get("form_data", {
@@ -198,52 +198,43 @@ def generate_report():
     })
     conversation_text = ""
     for turn in st.session_state["conversation"]:
-        conversation_text += f"【利用者】 {turn['user']}\n"
+        conversation_text += f"### 利用者\n{turn['user']}\n\n"
         for char_name, response in turn["responses"].items():
-            conversation_text += f"【{char_name}】 {response}\n"
-        conversation_text += "\n"
-    report = f"""
-# レポート
-
-## 現状の把握
-- **現在の悩み:** {form_data['problem']}
-- **体調:** {form_data['physical']}
-- **心理的健康:** {form_data['mental']}
-- **ストレス度:** {form_data['stress']}
-
-## 会話内容
-{conversation_text}
-
-## 具体的な対策案
-(ここに各専門家の回答を踏まえた改善策やアドバイスをまとめる)
-
-## 今後の対策・展望
-(将来的なサポートや目標などを記載)
-
-## 所見
-(全体を通した所見や補足事項)
-"""
+            conversation_text += f"**{char_name}:** {response}\n\n"
+    report = (
+        "# レポート\n\n"
+        "## 現状の把握\n"
+        f"- **現在の悩み:** {form_data['problem']}\n"
+        f"- **体調:** {form_data['physical']}\n"
+        f"- **心理的健康:** {form_data['mental']}\n"
+        f"- **ストレス度:** {form_data['stress']}\n\n"
+        "## 会話内容\n\n"
+        f"{conversation_text}\n\n"
+        "## 具体的な対策案\n"
+        "(ここに各専門家の回答を踏まえた改善策やアドバイスをまとめる)\n\n"
+        "## 今後の対策・展望\n"
+        "(将来的なサポートや目標などを記載)\n\n"
+        "## 所見\n"
+        "(全体を通した所見や補足事項)"
+    )
     return report
 
 # ---------------------------
-# PDF生成 (日本語フォント対応、改行処理に multi_cell 使用)
+# PDF生成 (日本語フォント対応、multi_cellで改行処理)
 # ---------------------------
 def create_pdf(report_text: str):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=15)
-    # fontsフォルダにあるNotoSansJP-VariableFont_wght.ttfを使用（通常フォント）
+    # fontsフォルダにあるNotoSansJP-VariableFont_wght.ttf を通常フォントとして使用
     pdf.add_font("NotoSansJP", "", "fonts/NotoSansJP-VariableFont_wght.ttf", uni=True)
     # 太字用フォントを登録
     pdf.add_font("NotoSansJP", "B", "fonts/NotoSansJP-Bold.ttf", uni=True)
-    pdf.set_font("NotoSansJP", "", 12)
-    
-    # まず見出し部分を太字で出力
-    pdf.set_font("NotoSansJP", "B", 14)
+    # 見出し部分は太字
+    pdf.set_font("NotoSansJP", "B", 16)
     pdf.multi_cell(0, 10, txt="レポート")
     pdf.ln(5)
-    
-    # 通常フォントに戻す
+    # 通常フォントに戻して本文出力
     pdf.set_font("NotoSansJP", "", 12)
     pdf.multi_cell(0, 7, txt=report_text)
     pdf_data = pdf.output(dest="S")
