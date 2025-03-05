@@ -92,13 +92,12 @@ st.markdown(
 # ------------------------------------------------------------------
 with st.sidebar:
     user_name = st.text_input("あなたの名前を入力してください", value="愛媛県庁職員", key="user_name")
-    consult_type = st.radio("相談タイプを選択してください", 
-                            ("本人の相談", "他者の相談", "デリケートな相談"), key="consult_type")
+    consult_type = st.radio("相談タイプを選択してください", ("本人の相談", "他者の相談", "デリケートな相談"), key="consult_type")
     if st.button("改善策のレポート", key="report_sidebar"):
         if st.session_state.get("conversation_turns", []):
             all_turns = "\n".join([
                 f"あなた: {turn['user']}\n回答: {turn['answer']}"
-                for turn in st.session_state.conversation_turns
+                for turn in st.session_state.get("conversation_turns", [])
             ])
             summary = generate_summary(all_turns)
             st.session_state["summary"] = summary
@@ -110,53 +109,54 @@ with st.sidebar:
 # サイドバー：選択式相談フォームと過去の会話履歴
 # ------------------------------------------------------------------
 if st.session_state.get("show_selection_form", False):
-    st.sidebar.header("選択式相談フォーム")
-    category = st.sidebar.selectbox("悩みの種類", ["人間関係", "仕事", "家庭", "経済", "健康", "その他"], key="category")
-    st.sidebar.subheader("身体の状態")
-    physical_status = st.sidebar.radio("身体の状態", ["良好", "普通", "不調"], key="physical")
-    physical_detail = st.sidebar.text_area("身体の状態の詳細", key="physical_detail", placeholder="具体的な症状や変化")
-    physical_duration = st.sidebar.selectbox("身体の症状の持続期間", ["数日", "1週間", "1ヶ月以上", "不明"], key="physical_duration")
-    st.sidebar.subheader("心の状態")
-    mental_status = st.sidebar.radio("心の状態", ["落ち着いている", "やや不安", "とても不安"], key="mental")
-    mental_detail = st.sidebar.text_area("心の状態の詳細", key="mental_detail", placeholder="感じる不安やストレス")
-    mental_duration = st.sidebar.selectbox("心の症状の持続期間", ["数日", "1週間", "1ヶ月以上", "不明"], key="mental_duration")
-    stress_level = st.sidebar.slider("ストレスレベル (1-10)", 1, 10, 5, key="stress")
-    recent_events = st.sidebar.text_area("最近の大きな出来事（任意）", key="events")
-    treatment_history = st.sidebar.radio("通院歴がありますか？", ["はい", "いいえ"], key="treatment")
-    ongoing_treatment = ""
-    if treatment_history == "はい":
-        ongoing_treatment = st.sidebar.radio("現在も通院中ですか？", ["はい", "いいえ"], key="ongoing")
-    if st.sidebar.button("選択内容を送信", key="submit_selection"):
-        selection_summary = (
-            f"【選択式相談フォーム】\n"
-            f"悩みの種類: {category}\n"
-            f"身体の状態: {physical_status}\n"
-            f"身体の詳細: {physical_detail}\n"
-            f"身体の症状の持続期間: {physical_duration}\n"
-            f"心の状態: {mental_status}\n"
-            f"心の詳細: {mental_detail}\n"
-            f"心の症状の持続期間: {mental_duration}\n"
-            f"ストレスレベル: {stress_level}\n"
-            f"最近の出来事: {recent_events}\n"
-            f"通院歴: {treatment_history}\n"
-        )
+    with st.sidebar:
+        st.header("選択式相談フォーム")
+        category = st.selectbox("悩みの種類", ["人間関係", "仕事", "家庭", "経済", "健康", "その他"], key="category")
+        st.subheader("身体の状態")
+        physical_status = st.radio("身体の状態", ["良好", "普通", "不調"], key="physical")
+        physical_detail = st.text_area("身体の状態の詳細", key="physical_detail", placeholder="具体的な症状や変化")
+        physical_duration = st.selectbox("身体の症状の持続期間", ["数日", "1週間", "1ヶ月以上", "不明"], key="physical_duration")
+        st.subheader("心の状態")
+        mental_status = st.radio("心の状態", ["落ち着いている", "やや不安", "とても不安"], key="mental")
+        mental_detail = st.text_area("心の状態の詳細", key="mental_detail", placeholder="感じる不安やストレス")
+        mental_duration = st.selectbox("心の症状の持続期間", ["数日", "1週間", "1ヶ月以上", "不明"], key="mental_duration")
+        stress_level = st.slider("ストレスレベル (1-10)", 1, 10, 5, key="stress")
+        recent_events = st.text_area("最近の大きな出来事（任意）", key="events")
+        treatment_history = st.radio("通院歴がありますか？", ["はい", "いいえ"], key="treatment")
+        ongoing_treatment = ""
         if treatment_history == "はい":
-            selection_summary += f"現在の通院状況: {ongoing_treatment}\n"
-        if "conversation_turns" not in st.session_state:
-            st.session_state.conversation_turns = []
-        st.session_state.conversation_turns.append({
-            "user": selection_summary, 
-            "answer": "選択式相談フォームの内容が送信され、反映されました。"
-        })
-        st.sidebar.success("送信しました！")
+            ongoing_treatment = st.radio("現在も通院中ですか？", ["はい", "いいえ"], key="ongoing")
+        if st.button("選択内容を送信", key="submit_selection"):
+            selection_summary = (
+                f"【選択式相談フォーム】\n"
+                f"悩みの種類: {category}\n"
+                f"身体の状態: {physical_status}\n"
+                f"身体の詳細: {physical_detail}\n"
+                f"身体の症状の持続期間: {physical_duration}\n"
+                f"心の状態: {mental_status}\n"
+                f"心の詳細: {mental_detail}\n"
+                f"心の症状の持続期間: {mental_duration}\n"
+                f"ストレスレベル: {stress_level}\n"
+                f"最近の出来事: {recent_events}\n"
+                f"通院歴: {treatment_history}\n"
+            )
+            if treatment_history == "はい":
+                selection_summary += f"現在の通院状況: {ongoing_treatment}\n"
+            if "conversation_turns" not in st.session_state:
+                st.session_state.conversation_turns = []
+            st.session_state.conversation_turns.append({
+                "user": selection_summary, 
+                "answer": "選択式相談フォームの内容が送信され、反映されました。"
+            })
+            st.success("送信しました！")
         
-    st.sidebar.header("過去の会話")
-    if st.session_state.conversation_turns:
-        for turn in st.session_state.conversation_turns:
-            st.sidebar.markdown(f"**あなた:** {turn['user'][:50]}...")
-            st.sidebar.markdown(f"**回答:** {turn['answer'][:50]}...")
-    else:
-        st.sidebar.info("まだ会話はありません。")
+        st.header("過去の会話")
+        if st.session_state.get("conversation_turns", []):
+            for turn in st.session_state.get("conversation_turns", []):
+                st.markdown(f"**あなた:** {turn['user'][:50]}...")
+                st.markdown(f"**回答:** {turn['answer'][:50]}...")
+        else:
+            st.info("まだ会話はありません。")
 
 # ------------------------------------------------------------------
 # キャラクター定義（4人専門家）
@@ -385,7 +385,7 @@ def typewriter_bubble(sender: str, full_text: str, align: str, delay: float = 0.
 # ------------------------------------------------------------------
 # Streamlit アプリ本体（チャット部分）
 # ------------------------------------------------------------------
-# メインエリア上部に、4人の専門家を横並びで表示
+# 上部に専門家キャラクターを横並びで表示
 st.markdown("### 専門家一覧")
 cols = st.columns(len(EXPERTS))
 for idx, expert in enumerate(EXPERTS):
@@ -396,16 +396,16 @@ for idx, expert in enumerate(EXPERTS):
         else:
             st.markdown("🤖")
 
-# チャットバブル表示エリア（ヘッダーは非表示）
+# メインエリア（トークバブル表示領域）
 conversation_container = st.empty()
 
 # ------------------------------------------------------------------
-# サイドバー：過去の会話履歴の簡易表示とサイドボタン
+# サイドバー：過去の会話履歴（簡易リスト）とサイドボタン
 # ------------------------------------------------------------------
 with st.sidebar:
     st.markdown("### 過去の会話")
-    if st.session_state.conversation_turns:
-        for turn in st.session_state.conversation_turns:
+    if st.session_state.get("conversation_turns", []):
+        for turn in st.session_state.get("conversation_turns", []):
             st.markdown(f"**あなた:** {turn['user'][:50]}...")
             st.markdown(f"**回答:** {turn['answer'][:50]}...")
     else:
@@ -414,7 +414,7 @@ with st.sidebar:
         if st.session_state.get("conversation_turns", []):
             all_turns = "\n".join([
                 f"あなた: {turn['user']}\n回答: {turn['answer']}"
-                for turn in st.session_state.conversation_turns
+                for turn in st.session_state.get("conversation_turns", [])
             ])
             summary = generate_summary(all_turns)
             st.session_state["summary"] = summary
@@ -425,7 +425,7 @@ with st.sidebar:
         if st.session_state.get("conversation_turns", []):
             context = "\n".join([
                 f"あなた: {turn['user']}\n回答: {turn['answer']}"
-                for turn in st.session_state.conversation_turns
+                for turn in st.session_state.get("conversation_turns", [])
             ])
             new_answer = continue_discussion("続きをお願いします。", context)
             st.session_state.conversation_turns.append({"user": "続き", "answer": new_answer})
@@ -457,12 +457,12 @@ with st.container():
             if "conversation_turns" not in st.session_state:
                 st.session_state.conversation_turns = []
             user_text = user_message
-            if len(st.session_state.conversation_turns) == 0:
+            if len(st.session_state.get("conversation_turns", [])) == 0:
                 answer_text = generate_expert_answers(user_text)
             else:
                 context = "\n".join([
                     f"あなた: {turn['user']}\n回答: {turn['answer']}"
-                    for turn in st.session_state.conversation_turns
+                    for turn in st.session_state.get("conversation_turns", [])
                 ])
                 answer_text = continue_discussion(user_text, context)
             st.session_state.conversation_turns.append({"user": user_text, "answer": answer_text})
@@ -478,7 +478,7 @@ with st.container():
         if st.session_state.get("conversation_turns", []):
             context = "\n".join([
                 f"あなた: {turn['user']}\n回答: {turn['answer']}"
-                for turn in st.session_state.conversation_turns
+                for turn in st.session_state.get("conversation_turns", [])
             ])
             new_discussion = continue_discussion("続きをお願いします。", context)
             st.session_state.conversation_turns.append({"user": "続き", "answer": new_discussion})
