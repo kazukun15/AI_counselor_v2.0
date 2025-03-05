@@ -91,9 +91,9 @@ st.markdown(
 # サイドバー：ユーザー情報、相談タイプ、改善策レポートボタン
 # ------------------------------------------------------------------
 with st.sidebar:
-    user_name = st.text_input("あなたの名前を入力してください", value="愛媛県庁職員", key="user_name")
-    consult_type = st.radio("相談タイプを選択してください", ("本人の相談", "他者の相談", "デリケートな相談"), key="consult_type")
-    if st.button("改善策のレポート", key="report_sidebar"):
+    user_name = st.text_input("あなたの名前を入力してください", value="愛媛県庁職員", key="sidebar_user_name")
+    consult_type = st.radio("相談タイプを選択してください", ("本人の相談", "他者の相談", "デリケートな相談"), key="sidebar_consult_type")
+    if st.button("改善策のレポート", key="report_sidebar_1"):
         if st.session_state.get("conversation_turns", []):
             all_turns = "\n".join([
                 f"あなた: {turn['user']}\n回答: {turn['answer']}"
@@ -111,22 +111,22 @@ with st.sidebar:
 if st.session_state.get("show_selection_form", False):
     with st.sidebar:
         st.header("選択式相談フォーム")
-        category = st.selectbox("悩みの種類", ["人間関係", "仕事", "家庭", "経済", "健康", "その他"], key="category")
+        category = st.selectbox("悩みの種類", ["人間関係", "仕事", "家庭", "経済", "健康", "その他"], key="category_form")
         st.subheader("身体の状態")
-        physical_status = st.radio("身体の状態", ["良好", "普通", "不調"], key="physical")
-        physical_detail = st.text_area("身体の状態の詳細", key="physical_detail", placeholder="具体的な症状や変化")
-        physical_duration = st.selectbox("身体の症状の持続期間", ["数日", "1週間", "1ヶ月以上", "不明"], key="physical_duration")
+        physical_status = st.radio("身体の状態", ["良好", "普通", "不調"], key="physical_form")
+        physical_detail = st.text_area("身体の状態の詳細", key="physical_detail_form", placeholder="具体的な症状や変化")
+        physical_duration = st.selectbox("身体の症状の持続期間", ["数日", "1週間", "1ヶ月以上", "不明"], key="physical_duration_form")
         st.subheader("心の状態")
-        mental_status = st.radio("心の状態", ["落ち着いている", "やや不安", "とても不安"], key="mental")
-        mental_detail = st.text_area("心の状態の詳細", key="mental_detail", placeholder="感じる不安やストレス")
-        mental_duration = st.selectbox("心の症状の持続期間", ["数日", "1週間", "1ヶ月以上", "不明"], key="mental_duration")
-        stress_level = st.slider("ストレスレベル (1-10)", 1, 10, 5, key="stress")
-        recent_events = st.text_area("最近の大きな出来事（任意）", key="events")
-        treatment_history = st.radio("通院歴がありますか？", ["はい", "いいえ"], key="treatment")
+        mental_status = st.radio("心の状態", ["落ち着いている", "やや不安", "とても不安"], key="mental_form")
+        mental_detail = st.text_area("心の状態の詳細", key="mental_detail_form", placeholder="感じる不安やストレス")
+        mental_duration = st.selectbox("心の症状の持続期間", ["数日", "1週間", "1ヶ月以上", "不明"], key="mental_duration_form")
+        stress_level = st.slider("ストレスレベル (1-10)", 1, 10, 5, key="stress_form")
+        recent_events = st.text_area("最近の大きな出来事（任意）", key="events_form")
+        treatment_history = st.radio("通院歴がありますか？", ["はい", "いいえ"], key="treatment_form")
         ongoing_treatment = ""
         if treatment_history == "はい":
-            ongoing_treatment = st.radio("現在も通院中ですか？", ["はい", "いいえ"], key="ongoing")
-        if st.button("選択内容を送信", key="submit_selection"):
+            ongoing_treatment = st.radio("現在も通院中ですか？", ["はい", "いいえ"], key="ongoing_form")
+        if st.button("選択内容を送信", key="submit_selection_1"):
             selection_summary = (
                 f"【選択式相談フォーム】\n"
                 f"悩みの種類: {category}\n"
@@ -149,7 +149,6 @@ if st.session_state.get("show_selection_form", False):
                 "answer": "選択式相談フォームの内容が送信され、反映されました。"
             })
             st.success("送信しました！")
-        
         st.header("過去の会話")
         if st.session_state.get("conversation_turns", []):
             for turn in st.session_state.get("conversation_turns", []):
@@ -179,7 +178,7 @@ except Exception as e:
     img_doctor = "💊"
 
 avatar_img_dict = {
-    "user": "👤",
+    "user": "👤",  # ユーザーは絵文字固定
     "精神科医師": img_psychiatrist,
     "カウンセラー": img_counselor,
     "メンタリスト": img_mentalist,
@@ -311,7 +310,7 @@ def display_chat():
         content = msg["content"]
         display_name = st.session_state.get("user_name", "ユーザー") if role == "user" else role
         if role == "user":
-            with st.chat_message("user", avatar=avatar_img_dict.get("user")):
+            with st.chat_message("user", avatar=avatar_img_dict.get("user", "👤")):
                 st.markdown(
                     f'<div style="text-align: right;"><div class="chat-bubble"><div class="chat-header">{display_name}</div>{content}</div></div>',
                     unsafe_allow_html=True,
@@ -383,9 +382,8 @@ def typewriter_bubble(sender: str, full_text: str, align: str, delay: float = 0.
     container.markdown(create_bubble(sender, full_text, align), unsafe_allow_html=True)
 
 # ------------------------------------------------------------------
-# Streamlit アプリ本体（チャット部分）
+# メインエリア：専門家キャラクターの固定表示（上部）
 # ------------------------------------------------------------------
-# 上部に専門家キャラクターを横並びで表示
 st.markdown("### 専門家一覧")
 cols = st.columns(len(EXPERTS))
 for idx, expert in enumerate(EXPERTS):
@@ -396,11 +394,13 @@ for idx, expert in enumerate(EXPERTS):
         else:
             st.markdown("🤖")
 
-# メインエリア（トークバブル表示領域）
+# ------------------------------------------------------------------
+# メインエリア：チャットバブル表示領域（上部）
+# ------------------------------------------------------------------
 conversation_container = st.empty()
 
 # ------------------------------------------------------------------
-# サイドバー：過去の会話履歴（簡易リスト）とサイドボタン
+# サイドバー：過去の会話履歴とサイドボタン
 # ------------------------------------------------------------------
 with st.sidebar:
     st.markdown("### 過去の会話")
@@ -410,7 +410,7 @@ with st.sidebar:
             st.markdown(f"**回答:** {turn['answer'][:50]}...")
     else:
         st.info("まだ会話はありません。")
-    if st.button("改善策のレポート", key="report_sidebar"):
+    if st.button("改善策のレポート", key="report_sidebar_2"):
         if st.session_state.get("conversation_turns", []):
             all_turns = "\n".join([
                 f"あなた: {turn['user']}\n回答: {turn['answer']}"
@@ -421,7 +421,7 @@ with st.sidebar:
             st.markdown("**まとめ:**\n" + summary)
         else:
             st.warning("まずは会話を開始してください。")
-    if st.button("続きを読み込む", key="continue_sidebar"):
+    if st.button("続きを読み込む", key="continue_sidebar_2"):
         if st.session_state.get("conversation_turns", []):
             context = "\n".join([
                 f"あなた: {turn['user']}\n回答: {turn['answer']}"
@@ -438,10 +438,7 @@ with st.sidebar:
 # 下部固定のユーザー入力エリア（LINE風チャットバー）
 # ------------------------------------------------------------------
 with st.container():
-    st.markdown(
-        '<div class="fixed-input">',
-        unsafe_allow_html=True,
-    )
+    st.markdown('<div class="fixed-input">', unsafe_allow_html=True)
     with st.form("chat_form", clear_on_submit=True):
         user_message = st.text_area("新たな発言を入力してください", placeholder="ここに入力", height=100, key="user_message")
         col1, col2 = st.columns(2)
