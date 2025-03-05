@@ -31,8 +31,9 @@ st.markdown(
         padding: 10px;
         margin: 10px 0;
         display: inline-block;
-        max-width: 70%;
+        max-width: 90%;
         line-height: 1.4;
+        word-wrap: break-word;
     }
     /* ユーザの吹き出し（右寄せ、淡い緑系） */
     .user-bubble {
@@ -51,8 +52,8 @@ st.markdown(
     /* キャラクターアイコンを円形に */
     .character-icon {
         border-radius: 50%;
-        width: 80px;
-        height: 80px;
+        width: 60px;
+        height: 60px;
         object-fit: cover;
     }
     /* タイトルなどの中央寄せ */
@@ -70,39 +71,26 @@ st.markdown(
 st.title("メンタルヘルスボット")
 
 # ---------------------------
-# キャラクター設定
+# 4人のキャラクター設定
 # ---------------------------
 characters = {
     "精神科医": {
         "image": "avatars/Psychiatrist.png",
-        "role": "専門知識をもとに改善案を提示する"
+        "role_description": "専門知識をもとに改善案を提示する"
     },
     "心理カウンセラー": {
         "image": "avatars/counselor.png",
-        "role": "専門知識を元に心に寄り添う"
+        "role_description": "専門知識を元に心に寄り添う"
     },
     "メンタリスト": {
         "image": "avatars/MENTALIST.png",
-        "role": "メンタリストの経験をもとに新たな発想により改善案を提示する"
+        "role_description": "メンタリストの経験をもとに新たな発想で改善案を提示する"
     },
     "内科医": {
         "image": "avatars/doctor.png",
-        "role": "精神的なもの以外の内科的な不調を調書から探し、改善案を提示する"
+        "role_description": "精神以外の内科的な不調を探り、改善案を提示する"
     }
 }
-
-# ---------------------------
-# サイドバー：担当キャラクター選択
-# ---------------------------
-st.sidebar.header("担当キャラクター")
-selected_character = st.sidebar.selectbox(
-    "どの専門家と話しますか？",
-    list(characters.keys())
-)
-
-char_data = characters[selected_character]
-char_image_path = char_data["image"]
-char_role_description = char_data["role"]
 
 # ---------------------------
 # サイドバー：選択式相談フォーム
@@ -132,21 +120,20 @@ stress_level = st.sidebar.selectbox(
 # ---------------------------
 # 会話履歴の管理
 # ---------------------------
+# 会話履歴は「ユーザメッセージ + 各キャラクターの応答」を1ターンとして保持
+# 例: st.session_state["conversation"] = [
+#   {
+#     "user": "ユーザの入力メッセージ",
+#     "responses": {
+#       "精神科医": "回答文",
+#       "心理カウンセラー": "回答文",
+#       ...
+#     }
+#   },
+#   ...
+# ]
 if "conversation" not in st.session_state:
     st.session_state["conversation"] = []
-
-# ---------------------------
-# キャラクター表示と役割
-# ---------------------------
-col1, col2 = st.columns([1, 4])
-with col1:
-    if os.path.exists(char_image_path):
-        char_img = Image.open(char_image_path)
-        st.image(char_img, use_column_width=False, width=80, caption=selected_character)
-with col2:
-    st.markdown(f"**{selected_character}**：{char_role_description}")
-
-st.markdown("---")
 
 # ---------------------------
 # Gemini API呼び出し用関数
@@ -154,23 +141,16 @@ st.markdown("---")
 def call_gemini_api(prompt_text: str) -> str:
     """
     Gemini API (Google Generative Language API) を呼び出して日本語での回答を取得する。
-    ハルシネーションを完全に防ぐことは困難だが、エラー処理を行うことで安全に失敗できるようにする。
     """
-    try:
-        # StreamlitのSecretsからAPIキーを取得
-        api_key = st.secrets["GEMINI_API_KEY"]
-    except Exception:
-        # APIキーが設定されていない場合
-        return "APIキーが設定されていません。"
+    # secrets からAPIキーを取得
+    api_key = st.secrets["GEMINI_API_KEY"]  # ここでKeyErrorが起こる場合はSecrets未設定
 
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
 
-    # Gemini API用のリクエストボディ
     payload = {
         "contents": [{
             "parts": [
                 {
-                    # 日本語で会話を続けるためのプロンプト
                     "text": prompt_text
                 }
             ]
@@ -182,8 +162,6 @@ def call_gemini_api(prompt_text: str) -> str:
         response = requests.post(url, headers=headers, json=payload, timeout=10)
         if response.status_code == 200:
             data = response.json()
-            # レスポンス構造から回答を取り出す
-            # 例: data["contents"][0]["parts"][0]["text"] に回答が入る想定
             gemini_output = data.get("contents", [])
             if gemini_output and len(gemini_output) > 0:
                 parts = gemini_output[0].get("parts", [])
@@ -191,67 +169,75 @@ def call_gemini_api(prompt_text: str) -> str:
                     return parts[0].get("text", "回答を取得できませんでした。")
             return "回答を取得できませんでした。"
         else:
-            return f"APIエラーが発生しました（ステータスコード: {response.status_code}）"
+            return f"APIエラー（ステータスコード: {response.status_code}）"
     except Exception as e:
-        return f"API呼び出し中にエラーが発生しました: {str(e)}"
+        return f"API呼び出しエラー: {str(e)}"
 
 # ---------------------------
-# 応答生成関数
+# 応答生成関数（キャラクターごと）
 # ---------------------------
-def generate_response(user_input: str, role: str) -> str:
+def generate_response_for_character(user_input: str, character_name: str, role_desc: str) -> str:
     """
     ユーザ入力とキャラクターの役割を踏まえ、Gemini APIを使って日本語の回答を生成。
     """
-    # キャラクター名を踏まえて簡単な指示を付与しつつ、ユーザの日本語入力を渡す例
-    # 実際にはプロンプトデザインを工夫し、ハルシネーションを減らす。
     system_prompt = (
-        f"あなたは{role}として、ユーザの悩みに寄り添い、専門的な視点から助言を行います。"
-        "ただし、医療行為ではなく、あくまで情報提供のみを行い、正確性を重視してください。"
-        "日本語で答えてください。"
+        f"あなたは{character_name}です。役割は「{role_desc}」です。\n"
+        "ユーザの悩みに寄り添い、専門的な視点から助言を行います。\n"
+        "ただし、医療行為ではなく、あくまで情報提供のみを行い、正確性を重視してください。\n"
+        "日本語で答えてください。\n\n"
+        f"【ユーザのメッセージ】\n{user_input}\n"
     )
-
-    # 実際のAPI呼び出し用プロンプト
-    # 例として「system的指示 + ユーザのメッセージ」を結合
-    # Gemini APIは会話文脈を保持するため、より高度な構成にする場合は複数ターンの履歴をまとめて渡す。
-    prompt_for_api = system_prompt + "\nユーザの質問: " + user_input
-
-    # Gemini API呼び出し
-    response_text = call_gemini_api(prompt_for_api)
-    return response_text
+    return call_gemini_api(system_prompt)
 
 # ---------------------------
 # チャット入力
 # ---------------------------
 user_input = st.chat_input("ここにメッセージを入力してください...")
 if user_input:
-    # ユーザのメッセージを会話履歴に追加
+    # 4人全員分の応答をまとめる
+    responses = {}
+    for char_name, char_info in characters.items():
+        response_text = generate_response_for_character(
+            user_input,
+            char_name,
+            char_info["role_description"]
+        )
+        responses[char_name] = response_text
+
+    # 会話履歴に追加
     st.session_state["conversation"].append({
-        "role": "user",
-        "content": user_input
-    })
-    # キャラクターからの返信生成
-    reply_text = generate_response(user_input, selected_character)
-    st.session_state["conversation"].append({
-        "role": selected_character,
-        "content": reply_text
+        "user": user_input,
+        "responses": responses
     })
 
 # ---------------------------
 # チャット履歴の表示
 # ---------------------------
-for message in st.session_state["conversation"]:
-    if message["role"] == "user":
-        # ユーザの吹き出し（右寄せ）
-        st.markdown(
-            f"<div class='bubble user-bubble'>{message['content']}</div><br><br>",
-            unsafe_allow_html=True
-        )
-    else:
-        # キャラクターの吹き出し（左寄せ）
-        st.markdown(
-            f"<div class='bubble character-bubble'>{message['content']}</div><br><br>",
-            unsafe_allow_html=True
-        )
+# ユーザの発言 -> 4人の応答を横に並べて表示
+for turn in st.session_state["conversation"]:
+    # まずユーザの吹き出し（右寄せ）
+    st.markdown(
+        f"<div class='bubble user-bubble'>{turn['user']}</div><br><br>",
+        unsafe_allow_html=True
+    )
+    # 4人の回答を横に並べる
+    col_list = st.columns(4)
+    i = 0
+    for char_name, char_info in characters.items():
+        with col_list[i]:
+            # キャラクター画像
+            if os.path.exists(char_info["image"]):
+                char_img = Image.open(char_info["image"])
+                st.image(char_img, use_column_width=False, width=60)
+            # キャラクター名
+            st.markdown(f"**{char_name}**")
+            # 吹き出し
+            st.markdown(
+                f"<div class='bubble character-bubble'>{turn['responses'][char_name]}</div>",
+                unsafe_allow_html=True
+            )
+        i += 1
+    st.write("---")
 
 # ---------------------------
 # レポート作成ボタン（サイドバー）
@@ -292,3 +278,4 @@ if st.sidebar.button("レポートを作成する"):
 st.markdown("---")
 st.markdown("**注意:** このアプリは情報提供を目的としており、医療行為を行うものではありません。")
 st.markdown("緊急の場合や深刻な症状がある場合は、必ず医師などの専門家に直接ご相談ください。")
+
