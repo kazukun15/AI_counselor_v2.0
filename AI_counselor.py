@@ -88,12 +88,13 @@ st.markdown(
 )
 
 # ------------------------------------------------------------------
-# サイドバー：ユーザー情報＆相談タイプ＆改善策レポートボタン
+# サイドバー：ユーザー情報、相談タイプ、改善策レポートボタン
 # ------------------------------------------------------------------
 with st.sidebar:
     user_name = st.text_input("あなたの名前を入力してください", value="愛媛県庁職員", key="user_name")
-    consult_type = st.radio("相談タイプを選択してください", ("本人の相談", "他者の相談", "デリケートな相談"), key="consult_type")
-    if st.button("改善策のレポート"):
+    consult_type = st.radio("相談タイプを選択してください", 
+                            ("本人の相談", "他者の相談", "デリケートな相談"), key="consult_type")
+    if st.button("改善策のレポート", key="report_sidebar"):
         if st.session_state.get("conversation_turns", []):
             all_turns = "\n".join([
                 f"あなた: {turn['user']}\n回答: {turn['answer']}"
@@ -106,7 +107,7 @@ with st.sidebar:
             st.warning("まずは会話を開始してください。")
 
 # ------------------------------------------------------------------
-# サイドバー：選択式相談フォーム（収納）
+# サイドバー：選択式相談フォームと過去の会話履歴
 # ------------------------------------------------------------------
 if st.session_state.get("show_selection_form", False):
     st.sidebar.header("選択式相談フォーム")
@@ -141,13 +142,15 @@ if st.session_state.get("show_selection_form", False):
         )
         if treatment_history == "はい":
             selection_summary += f"現在の通院状況: {ongoing_treatment}\n"
+        if "conversation_turns" not in st.session_state:
+            st.session_state.conversation_turns = []
         st.session_state.conversation_turns.append({
             "user": selection_summary, 
             "answer": "選択式相談フォームの内容が送信され、反映されました。"
         })
         st.sidebar.success("送信しました！")
-    # サイドバーに簡易会話履歴も表示
-    st.sidebar.header("会話履歴")
+        
+    st.sidebar.header("過去の会話")
     if st.session_state.conversation_turns:
         for turn in st.session_state.conversation_turns:
             st.sidebar.markdown(f"**あなた:** {turn['user'][:50]}...")
@@ -176,7 +179,7 @@ except Exception as e:
     img_doctor = "💊"
 
 avatar_img_dict = {
-    "user": "👤",  # ユーザーは絵文字固定
+    "user": "👤",
     "精神科医師": img_psychiatrist,
     "カウンセラー": img_counselor,
     "メンタリスト": img_mentalist,
@@ -397,7 +400,8 @@ for idx, expert in enumerate(EXPERTS):
 conversation_container = st.empty()
 
 # ------------------------------------------------------------------
-# サイドバー：過去の会話履歴（簡易リスト）を表示
+# サイドバー：過去の会話履歴の簡易表示とサイドボタン
+# ------------------------------------------------------------------
 with st.sidebar:
     st.markdown("### 過去の会話")
     if st.session_state.conversation_turns:
@@ -406,11 +410,7 @@ with st.sidebar:
             st.markdown(f"**回答:** {turn['answer'][:50]}...")
     else:
         st.info("まだ会話はありません。")
-
-# ------------------------------------------------------------------
-# 継続ボタン（改善策レポート、続きボタンはサイドバーに配置）
-with st.sidebar:
-    if st.button("改善策のレポート"):
+    if st.button("改善策のレポート", key="report_sidebar"):
         if st.session_state.get("conversation_turns", []):
             all_turns = "\n".join([
                 f"あなた: {turn['user']}\n回答: {turn['answer']}"
@@ -421,7 +421,7 @@ with st.sidebar:
             st.markdown("**まとめ:**\n" + summary)
         else:
             st.warning("まずは会話を開始してください。")
-    if st.button("続きを読み込む"):
+    if st.button("続きを読み込む", key="continue_sidebar"):
         if st.session_state.get("conversation_turns", []):
             context = "\n".join([
                 f"あなた: {turn['user']}\n回答: {turn['answer']}"
@@ -446,9 +446,9 @@ with st.container():
         user_message = st.text_area("新たな発言を入力してください", placeholder="ここに入力", height=100, key="user_message")
         col1, col2 = st.columns(2)
         with col1:
-            send_button = st.form_submit_button("送信")
+            send_button = st.form_submit_button("送信", key="send_button")
         with col2:
-            continue_button = st.form_submit_button("続きを話す")
+            continue_button = st.form_submit_button("続きを話す", key="continue_button")
     st.markdown("</div>", unsafe_allow_html=True)
     
     # 送信ボタン処理
