@@ -118,20 +118,9 @@ stress_level = st.sidebar.selectbox(
 )
 
 # ---------------------------
-# 会話履歴の管理
+# 会話履歴の管理（統一した形式）
 # ---------------------------
-# 会話履歴は「ユーザメッセージ + 各キャラクターの応答」を1ターンとして保持
-# 例: st.session_state["conversation"] = [
-#   {
-#     "user": "ユーザの入力メッセージ",
-#     "responses": {
-#       "精神科医": "回答文",
-#       "心理カウンセラー": "回答文",
-#       ...
-#     }
-#   },
-#   ...
-# ]
+# 各ターンは {"user": ユーザ入力, "responses": {各キャラクターの回答}} の形式で保存
 if "conversation" not in st.session_state:
     st.session_state["conversation"] = []
 
@@ -141,18 +130,15 @@ if "conversation" not in st.session_state:
 def call_gemini_api(prompt_text: str) -> str:
     """
     Gemini API (Google Generative Language API) を呼び出して日本語での回答を取得する。
+    st.secrets["GEMINI_API_KEY"]からAPIキーを取得します。
     """
-    # secrets からAPIキーを取得
-    api_key = st.secrets["GEMINI_API_KEY"]  # ここでKeyErrorが起こる場合はSecrets未設定
-
+    api_key = st.secrets["GEMINI_API_KEY"]  # secretsからキー取得（設定されていない場合はKeyErrorになります）
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
 
     payload = {
         "contents": [{
             "parts": [
-                {
-                    "text": prompt_text
-                }
+                {"text": prompt_text}
             ]
         }]
     }
@@ -174,11 +160,11 @@ def call_gemini_api(prompt_text: str) -> str:
         return f"API呼び出しエラー: {str(e)}"
 
 # ---------------------------
-# 応答生成関数（キャラクターごと）
+# 応答生成関数（各キャラクター用）
 # ---------------------------
 def generate_response_for_character(user_input: str, character_name: str, role_desc: str) -> str:
     """
-    ユーザ入力とキャラクターの役割を踏まえ、Gemini APIを使って日本語の回答を生成。
+    ユーザ入力とキャラクターの役割を踏まえて、Gemini APIを使い日本語で回答を生成します。
     """
     system_prompt = (
         f"あなたは{character_name}です。役割は「{role_desc}」です。\n"
@@ -190,21 +176,21 @@ def generate_response_for_character(user_input: str, character_name: str, role_d
     return call_gemini_api(system_prompt)
 
 # ---------------------------
-# チャット入力
+# チャット入力（日本語固定）
 # ---------------------------
 user_input = st.chat_input("ここにメッセージを入力してください...")
 if user_input:
-    # 4人全員分の応答をまとめる
+    # 4人分の回答を生成
     responses = {}
     for char_name, char_info in characters.items():
-        response_text = generate_response_for_character(
+        answer = generate_response_for_character(
             user_input,
             char_name,
             char_info["role_description"]
         )
-        responses[char_name] = response_text
+        responses[char_name] = answer
 
-    # 会話履歴に追加
+    # 統一した形式で会話履歴に追加
     st.session_state["conversation"].append({
         "user": user_input,
         "responses": responses
@@ -213,25 +199,23 @@ if user_input:
 # ---------------------------
 # チャット履歴の表示
 # ---------------------------
-# ユーザの発言 -> 4人の応答を横に並べて表示
 for turn in st.session_state["conversation"]:
-    # まずユーザの吹き出し（右寄せ）
+    # ユーザの発言（右寄せ）
     st.markdown(
         f"<div class='bubble user-bubble'>{turn['user']}</div><br><br>",
         unsafe_allow_html=True
     )
-    # 4人の回答を横に並べる
-    col_list = st.columns(4)
+    # 4人の回答を横並びに表示
+    cols = st.columns(4)
     i = 0
-    for char_name, char_info in characters.items():
-        with col_list[i]:
-            # キャラクター画像
-            if os.path.exists(char_info["image"]):
-                char_img = Image.open(char_info["image"])
-                st.image(char_img, use_column_width=False, width=60)
-            # キャラクター名
+    for char_name in characters:
+        with cols[i]:
+            # キャラクター画像の表示
+            image_path = characters[char_name]["image"]
+            if os.path.exists(image_path):
+                char_img = Image.open(image_path)
+                st.image(char_img, width=60)
             st.markdown(f"**{char_name}**")
-            # 吹き出し
             st.markdown(
                 f"<div class='bubble character-bubble'>{turn['responses'][char_name]}</div>",
                 unsafe_allow_html=True
@@ -243,9 +227,6 @@ for turn in st.session_state["conversation"]:
 # レポート作成ボタン（サイドバー）
 # ---------------------------
 if st.sidebar.button("レポートを作成する"):
-    """
-    会話全体やフォーム入力内容をまとめたレポートをMarkdown形式で表示。
-    """
     known_info = f"- 現在の悩み: {problem}\n- 体調: {physical_condition}\n- 心理的健康: {mental_health}\n- ストレス度: {stress_level}"
     current_issues = "会話の中で感じた主な悩みを整理します。"
     improvements = "専門的な視点から提案できる具体的な改善案を記載します。"
@@ -278,4 +259,3 @@ if st.sidebar.button("レポートを作成する"):
 st.markdown("---")
 st.markdown("**注意:** このアプリは情報提供を目的としており、医療行為を行うものではありません。")
 st.markdown("緊急の場合や深刻な症状がある場合は、必ず医師などの専門家に直接ご相談ください。")
-
