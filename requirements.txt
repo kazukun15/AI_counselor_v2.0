@@ -1,5 +1,2 @@
 streamlit
-streamlit-chat
 Pillow
-requests
-toml
