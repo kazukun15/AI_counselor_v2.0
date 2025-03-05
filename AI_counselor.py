@@ -72,7 +72,7 @@ st.markdown(
         margin-bottom: 4px;
         color: {primaryColor};
     }}
-    /* 下部固定入力エリアの調整 */
+    /* 下部固定入力エリア */
     .fixed-input {{
         position: fixed;
         bottom: 0;
@@ -91,7 +91,7 @@ st.markdown(
 # ユーザー情報入力（上部）
 # ------------------------------------------------------------------
 user_name = st.text_input("あなたの名前を入力してください", value="愛媛県庁職員", key="user_name")
-# ※ AIの年齢は削除
+# ※ AIの年齢入力は削除
 
 col1, col2 = st.columns([3, 1])
 with col1:
@@ -116,7 +116,7 @@ if "conversation_turns" not in st.session_state:
     st.session_state.conversation_turns = []
 
 # ------------------------------------------------------------------
-# サイドバー：選択式相談フォーム（収納）と会話履歴表示
+# サイドバー：選択式相談フォーム（収納）と会話履歴の簡易表示
 # ------------------------------------------------------------------
 if st.session_state.get("show_selection_form", False):
     st.sidebar.header("選択式相談フォーム")
@@ -157,7 +157,6 @@ if st.session_state.get("show_selection_form", False):
         })
         st.sidebar.success("送信しました！")
         
-    # サイドバーに会話履歴を表示（簡易リスト）
     st.sidebar.header("会話履歴")
     if st.session_state.conversation_turns:
         for turn in st.session_state.conversation_turns:
@@ -167,9 +166,8 @@ if st.session_state.get("show_selection_form", False):
         st.sidebar.info("まだ会話はありません。")
 
 # ------------------------------------------------------------------
-# キャラクター定義（4人専門家）
+# キャラクター定義（固定：4人専門家のみ）
 # ------------------------------------------------------------------
-# 利用するのは「精神科医師」「カウンセラー」「メンタリスト」「内科医」
 EXPERTS = ["精神科医師", "カウンセラー", "メンタリスト", "内科医"]
 
 # ------------------------------------------------------------------
@@ -188,7 +186,7 @@ except Exception as e:
     img_doctor = "💊"
 
 avatar_img_dict = {
-    "user": "👤",  # ユーザーは絵文字で固定
+    "user": "👤",  # ユーザーは絵文字固定
     "精神科医師": img_psychiatrist,
     "カウンセラー": img_counselor,
     "メンタリスト": img_mentalist,
@@ -257,29 +255,39 @@ def analyze_question(question: str) -> int:
     return score
 
 def adjust_parameters(question: str) -> dict:
-    # AIの年齢は削除して、デフォルトの中年向け設定とする
+    # 固定中年向け設定
     params = {}
     params["精神科医師"] = {"style": "温かく落ち着いた", "detail": "豊富な経験に基づいた判断を下す"}
-    params["カウンセラー"] = {"style": "共感的", "detail": "深い理解と共感で心に寄り添う"}
-    params["メンタリスト"] = {"style": "柔軟", "detail": "実務的な知見を活かした意見を提供する"}
+    if analyze_question(question) > 0:
+        params["カウンセラー"] = {"style": "共感的", "detail": "深い理解と共感で心に寄り添う"}
+        params["メンタリスト"] = {"style": "柔軟", "detail": "実務的な知見を活かした意見を提供する"}
+    else:
+        params["カウンセラー"] = {"style": "分析的", "detail": "論理的な視点で根拠をもって説明する"}
+        params["メンタリスト"] = {"style": "客観的", "detail": "中立的な観点から問題点を整理する"}
     params["内科医"] = {"style": "実直な", "detail": "身体の不調や他の病気の有無を慎重にチェックする"}
     return params
 
-def generate_discussion(question: str, persona_params: dict) -> str:
+def generate_expert_answers(question: str) -> str:
     current_user = st.session_state.get("user_name", "ユーザー")
-    prompt = f"【{current_user}さんの質問】\n{question}\n\n"
-    for name, params in persona_params.items():
-        prompt += f"{name}は【{params['style']}な視点】で、{params['detail']}。\n"
+    consult_type = st.session_state.get("consult_type", "本人の相談")
+    if consult_type == "デリケートな相談":
+        consult_info = ("この相談は大人の発達障害（例：ADHDなど）を含む、デリケートな相談です。"
+                        "公的機関や学術論文を参照し、正確な情報に基づいた回答をお願いします。")
+    elif consult_type == "他者の相談":
+        consult_info = "この相談は、他者が抱える障害に関するものです。専門的かつ客観的な視点をお願いします。"
+    else:
+        consult_info = "この相談は本人が抱える悩みに関するものです。"
+        
+    prompt = f"【{current_user}さんの質問】\n{question}\n\n{consult_info}\n"
     prompt += (
-        "\n上記情報を元に、以下の4人の専門家が友達同士のように自然な会話をしてください。\n"
-        "出力形式は以下の通りです。\n"
+        "以下は、4人の専門家からの個別回答です。必ず以下の形式で出力してください:\n"
         "精神科医師: <回答>\n"
         "カウンセラー: <回答>\n"
         "メンタリスト: <回答>\n"
         "内科医: <回答>\n"
-        "余計なJSON形式は入れず、自然な日本語の会話のみを出力してください。"
+        "各回答は300～400文字程度で、自然な日本語で出力してください。"
     )
-    return call_gemini_api(prompt)
+    return truncate_text(call_gemini_api(prompt), 400)
 
 def continue_discussion(additional_input: str, current_turns: str) -> str:
     prompt = (
@@ -417,21 +425,20 @@ if st.button("続きを読み込む"):
         st.warning("会話がありません。")
 
 # ------------------------------------------------------------------
-# 専門家キャラクターの表示（上部固定）
+# 専門家キャラクターの固定表示（上部）
 # ------------------------------------------------------------------
 st.markdown("### 専門家一覧")
 cols = st.columns(len(EXPERTS))
 for idx, expert in enumerate(EXPERTS):
     with cols[idx]:
         st.markdown(f"**{expert}**")
-        # アバター画像を表示（画像が読み込まれていれば）
         if expert in avatar_img_dict and not isinstance(avatar_img_dict[expert], str):
             st.image(avatar_img_dict[expert], width=60)
         else:
             st.markdown("🤖")
 
 # ------------------------------------------------------------------
-# ユーザー入力エリア（下部固定）
+# ユーザー入力エリア（下部固定：LINE風チャットバー）
 # ------------------------------------------------------------------
 with st.container():
     st.markdown(
@@ -454,14 +461,13 @@ with st.container():
                 st.session_state.conversation_turns = []
             user_text = user_message
             if len(st.session_state.conversation_turns) == 0:
-                expert_params = adjust_parameters(user_message, 30)  # 固定値（40歳相当）で設定
-                answer_text = generate_discussion(user_message, expert_params, 30)
+                answer_text = generate_expert_answers(user_text)
             else:
                 context = "\n".join([
                     f"あなた: {turn['user']}\n回答: {turn['answer']}"
                     for turn in st.session_state.conversation_turns
                 ])
-                answer_text = continue_discussion(user_message, context)
+                answer_text = continue_discussion(user_text, context)
             st.session_state.conversation_turns.append({"user": user_text, "answer": answer_text})
             conversation_container.markdown("### 会話履歴")
             display_chat()
