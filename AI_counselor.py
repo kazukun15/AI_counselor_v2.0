@@ -129,10 +129,11 @@ if "conversation" not in st.session_state:
 # ---------------------------
 def call_gemini_api(prompt_text: str) -> str:
     """
-    Gemini API (Google Generative Language API) を呼び出して日本語での回答を取得する。
-    st.secrets["GEMINI_API_KEY"]からAPIキーを取得します。
+    Gemini API (Google Generative Language API) を呼び出して日本語での回答を取得します。
+    Secretsファイルの [general] セクションから api_key を取得します。
     """
-    api_key = st.secrets["GEMINI_API_KEY"]  # secretsからキー取得（設定されていない場合はKeyErrorになります）
+    # [general] セクションの api_key を取得
+    api_key = st.secrets["general"]["api_key"]
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
 
     payload = {
