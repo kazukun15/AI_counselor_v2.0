@@ -51,7 +51,12 @@ st.markdown(
         clear: both;
     }
     /* キャラクターアイコンを円形に */
-    .character-icon { border-radius: 50%; width: 60px; height: 60px; object-fit: cover; }
+    .character-icon {
+        border-radius: 50%;
+        width: 60px;
+        height: 60px;
+        object-fit: cover;
+    }
     </style>
     """,
     unsafe_allow_html=True
@@ -256,13 +261,11 @@ def create_pdf(report_text: str):
     return pdf.output(dest="S").encode("latin1")
 
 # ---------------------------
-# サイドバーでレポート表示＆PDF出力
+# サイドバーに「レポートを出力」ボタンだけ配置
 # ---------------------------
-st.sidebar.markdown("### レポート")
-report_text = generate_report()
-st.sidebar.markdown(report_text)
-
-if st.sidebar.button("PDFレポートをダウンロード"):
+if st.sidebar.button("レポートを出力"):
+    # ボタン押下時にレポート生成＆PDFダウンロードボタンを表示
+    report_text = generate_report()
     pdf_data = create_pdf(report_text)
     st.sidebar.download_button(
         label="PDFをダウンロード",
