@@ -139,7 +139,7 @@ def build_prompt(user_input: str, character_name: str, role_desc: str) -> str:
     prompt = (
         f"あなたは{character_name}です。役割は「{role_desc}」です。\n"
         "以下の利用者の相談内容に対して、具体的なアドバイスや改善策を提示してください。\n"
-        "医療行為は行わず、あくまで情報提供の範囲で正確な知見に基づいた回答をお願いします。\n"
+        "医療行為の範囲で正確な知見に基づいた回答をお願いします。\n"
         "回答は日本語で簡潔に述べ、利用者に安心感や前向きな提案が伝わるようにしてください。\n\n"
         f"【利用者の相談】\n{user_input}\n"
     )
@@ -226,7 +226,7 @@ def generate_report():
     return report
 
 # ---------------------------
-# PDF生成 (日本語フォント対応、テキスト折り返し対応)
+# PDF生成 (日本語フォント対応、改行処理に multi_cell 使用)
 # ---------------------------
 def create_pdf(report_text: str):
     pdf = FPDF()
@@ -235,10 +235,8 @@ def create_pdf(report_text: str):
     # fontsフォルダにあるNotoSansJP-VariableFont_wght.ttfを使用
     pdf.add_font("NotoSansJP", "", "fonts/NotoSansJP-VariableFont_wght.ttf", uni=True)
     pdf.set_font("NotoSansJP", "", 12)
-    
-    # multi_cell を使って自動改行
-    for line in report_text.split("\n"):
-        pdf.multi_cell(0, 7, txt=line)
+    # 全体テキストを1回で multi_cell で出力
+    pdf.multi_cell(0, 7, txt=report_text)
     pdf_data = pdf.output(dest="S")
     return bytes(pdf_data)
 
