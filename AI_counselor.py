@@ -454,8 +454,8 @@ with st.container():
                 st.session_state.conversation_turns = []
             user_text = user_message
             if len(st.session_state.conversation_turns) == 0:
-                expert_params = adjust_parameters(user_message, 40)  # 固定値（40歳相当）で設定
-                answer_text = generate_discussion(user_message, expert_params, 40)
+                expert_params = adjust_parameters(user_message, 30)  # 固定値（40歳相当）で設定
+                answer_text = generate_discussion(user_message, expert_params, 30)
             else:
                 context = "\n".join([
                     f"あなた: {turn['user']}\n回答: {turn['answer']}"
