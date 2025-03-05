@@ -117,7 +117,6 @@ def call_gemini_api(prompt_text: str) -> str:
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL_NAME}:generateContent?key={API_KEY}"
     payload = {"contents": [{"parts": [{"text": prompt_text}]}]}
     headers = {"Content-Type": "application/json"}
-
     try:
         response = requests.post(url, headers=headers, json=payload, timeout=10)
         if response.status_code == 200:
@@ -156,7 +155,6 @@ def get_all_responses(user_input: str):
         for char_name, char_info in characters.items():
             prompt = build_prompt(user_input, char_name, char_info["role_description"])
             future_dict[char_name] = executor.submit(call_gemini_api, prompt)
-        
         for char_name, future in future_dict.items():
             results[char_name] = future.result()
     return results
@@ -189,7 +187,7 @@ for turn in st.session_state["conversation"]:
     st.write("---")
 
 # ---------------------------
-# レポート生成
+# レポート生成関数
 # ---------------------------
 def generate_report():
     form_data = st.session_state.get("form_data", {
@@ -198,14 +196,12 @@ def generate_report():
         "mental": "未入力",
         "stress": "未入力"
     })
-    
     conversation_text = ""
     for turn in st.session_state["conversation"]:
         conversation_text += f"【利用者】 {turn['user']}\n"
         for char_name, response in turn["responses"].items():
             conversation_text += f"【{char_name}】 {response}\n"
         conversation_text += "\n"
-    
     report = f"""
 # レポート
 
@@ -236,15 +232,14 @@ def create_pdf(report_text: str):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=15)
-    
-    # fontsフォルダにあるNotoSansJP-VariableFont_wght.ttfを使用
+    # fontsフォルダに NotoSansJP-VariableFont_wght.ttf がある前提
     pdf.add_font("NotoSansJP", "", "fonts/NotoSansJP-VariableFont_wght.ttf", uni=True)
     pdf.set_font("NotoSansJP", "", 12)
-
     for line in report_text.split("\n"):
         pdf.cell(0, 7, txt=line, ln=True)
-    # pdf.output(dest="S") は既にバイト型を返すため、encodeは不要
-    return pdf.output(dest="S")
+    # FPDF.output(dest="S") が bytearray を返す場合は、明示的に bytes() に変換
+    pdf_data = pdf.output(dest="S")
+    return bytes(pdf_data)
 
 # ---------------------------
 # サイドバーに「レポートを出力」ボタンのみ配置
