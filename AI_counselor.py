@@ -130,7 +130,7 @@ if "conversation" not in st.session_state:
     st.session_state["conversation"] = []
 
 # ---------------------------
-# Gemini API 呼び出し用関数
+# Gemini API 呼び出し用関数（逐次実行）
 # ---------------------------
 def call_gemini_api(prompt_text: str) -> str:
     """
@@ -146,19 +146,13 @@ def call_gemini_api(prompt_text: str) -> str:
     
     try:
         response = requests.post(url, headers=headers, json=payload, timeout=10)
-        
-        # デバッグ用: レスポンスのステータスとJSONを表示
         st.write("DEBUG: Gemini API response status:", response.status_code)
-        try:
-            st.write("DEBUG: Gemini API response JSON:", response.json())
-        except Exception as e:
-            st.write("DEBUG: レスポンスのJSON解析に失敗しました。", e)
-        
         if response.status_code == 200:
             data = response.json()
-            gemini_output = data.get("contents", [])
+            # ここを "candidates" キーを使用して回答を取得するように修正
+            gemini_output = data.get("candidates", [])
             if gemini_output and len(gemini_output) > 0:
-                parts = gemini_output[0].get("parts", [])
+                parts = gemini_output[0].get("content", {}).get("parts", [])
                 if parts and len(parts) > 0:
                     return parts[0].get("text", "回答を取得できませんでした。")
             return "回答を取得できませんでした。"
@@ -173,15 +167,11 @@ def call_gemini_api(prompt_text: str) -> str:
 def build_prompt(user_input: str, character_name: str, role_desc: str) -> str:
     """
     各キャラクター向けのプロンプトを生成します。
-    例:
-    「あなたは【精神科医】です。あなたの役割は、利用者の悩みや症状を整理し、具体的な改善策を提案することです。
-    以下の相談に対して、専門知識に基づくアドバイスを日本語で提供してください。
-    【利用者の相談】・・・」
     """
     prompt = (
         f"あなたは{character_name}です。役割は「{role_desc}」です。\n"
         "以下の利用者の相談内容に対して、具体的なアドバイスや改善策を提示してください。\n"
-        "医療行為を行うのではなく、あくまで情報提供の範囲で、正確な知見に基づいた回答をお願いします。\n"
+        "医療行為は行わず、あくまで情報提供の範囲で正確な知見に基づいた回答をお願いします。\n"
         "回答は日本語で簡潔に述べ、利用者に安心感や前向きな提案が伝わるようにしてください。\n\n"
         f"【利用者の相談】\n{user_input}\n"
     )
