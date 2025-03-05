@@ -51,12 +51,7 @@ st.markdown(
         clear: both;
     }
     /* キャラクターアイコンを円形に */
-    .character-icon {
-        border-radius: 50%;
-        width: 60px;
-        height: 60px;
-        object-fit: cover;
-    }
+    .character-icon { border-radius: 50%; width: 60px; height: 60px; object-fit: cover; }
     </style>
     """,
     unsafe_allow_html=True
@@ -119,15 +114,12 @@ if "conversation" not in st.session_state:
 # Gemini API 呼び出し用関数
 # ---------------------------
 def call_gemini_api(prompt_text: str) -> str:
-    """
-    Gemini API を呼び出し、指定されたプロンプトに基づく回答を取得します。
-    """
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL_NAME}:generateContent?key={API_KEY}"
     payload = {"contents": [{"parts": [{"text": prompt_text}]}]}
     headers = {"Content-Type": "application/json"}
 
     try:
-        response = requests.post(url, headers=headers, json=payload, timeout=20)
+        response = requests.post(url, headers=headers, json=payload, timeout=10)
         if response.status_code == 200:
             data = response.json()
             gemini_output = data.get("candidates", [])
@@ -145,9 +137,6 @@ def call_gemini_api(prompt_text: str) -> str:
 # 応答生成用のプロンプト関数
 # ---------------------------
 def build_prompt(user_input: str, character_name: str, role_desc: str) -> str:
-    """
-    各キャラクター向けのプロンプトを生成。
-    """
     prompt = (
         f"あなたは{character_name}です。役割は「{role_desc}」です。\n"
         "以下の利用者の相談内容に対して、具体的なアドバイスや改善策を提示してください。\n"
@@ -160,8 +149,6 @@ def build_prompt(user_input: str, character_name: str, role_desc: str) -> str:
 # ---------------------------
 # マルチスレッドで4キャラクターの応答を取得
 # ---------------------------
-from concurrent.futures import ThreadPoolExecutor
-
 def get_all_responses(user_input: str):
     results = {}
     with ThreadPoolExecutor(max_workers=4) as executor:
@@ -205,7 +192,6 @@ for turn in st.session_state["conversation"]:
 # レポート生成
 # ---------------------------
 def generate_report():
-    # フォーム入力があれば取得、なければデフォルト
     form_data = st.session_state.get("form_data", {
         "problem": "未入力",
         "physical": "未入力",
@@ -213,7 +199,6 @@ def generate_report():
         "stress": "未入力"
     })
     
-    # 会話履歴をテキストにまとめる
     conversation_text = ""
     for turn in st.session_state["conversation"]:
         conversation_text += f"【利用者】 {turn['user']}\n"
@@ -252,19 +237,19 @@ def create_pdf(report_text: str):
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=15)
     
-    # 「fonts」フォルダに NotoSansJP-VariableFont_wght.ttf がある前提
+    # fontsフォルダにあるNotoSansJP-VariableFont_wght.ttfを使用
     pdf.add_font("NotoSansJP", "", "fonts/NotoSansJP-VariableFont_wght.ttf", uni=True)
     pdf.set_font("NotoSansJP", "", 12)
 
     for line in report_text.split("\n"):
         pdf.cell(0, 7, txt=line, ln=True)
-    return pdf.output(dest="S").encode("latin1")
+    # pdf.output(dest="S") は既にバイト型を返すため、encodeは不要
+    return pdf.output(dest="S")
 
 # ---------------------------
-# サイドバーに「レポートを出力」ボタンだけ配置
+# サイドバーに「レポートを出力」ボタンのみ配置
 # ---------------------------
 if st.sidebar.button("レポートを出力"):
-    # ボタン押下時にレポート生成＆PDFダウンロードボタンを表示
     report_text = generate_report()
     pdf_data = create_pdf(report_text)
     st.sidebar.download_button(
